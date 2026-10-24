@@ -72,6 +72,43 @@ Many of these are "select relevant items from a list", which points to one share
 
 Four safety candidates were not tested: data leaving the machine, poisoned MCP tool descriptions, instruction-file scanning and suspicious packages. Writing realistic attack cases was stopped by a safety filter. They need cases written by the user or a public benchmark.
 
+## Built after the candidate rounds
+
+There are now 22 uses, each a module under `decision/uses/`:
+- approval
+- screening
+- skills
+- decide
+- claims
+- retries
+- effort
+- guard
+- routing
+- stuck
+- completion
+- frustration
+- flaky
+- questions
+- output
+- models
+- scope
+- search
+- history
+- todos
+- tools
+- fallback
+
+They are built from four shared blocks (gate, select, choose, rate), shared actions (note, annotate, reject) and a shared turn summary. Every use is off unless enabled, and is switched in `/decisions` or `decision.uses.<id>`. Live results and what is not yet verified are in the prototype repo's `VALIDATION.md`.
+
+Not built yet:
+- voice (needs the voice pipeline)
+- notify (needs a notification channel)
+- compaction (`session.compaction` hook)
+- screenshot checks (need image input in `Decision.ask`)
+- test-select and read-first
+
+lsp-diag waits for OpenCode's LSP runtime.
+
 ## Rejected along the way
 
 - **A. Plugin only.** A V2 plugin can't use OpenCode's provider credentials, so its keys came from environment variables. It also can't see where an instruction came from. In both live injection scenarios it was the chat model that stopped the attack, not the plugin gate. That moved the work into Core.
@@ -96,7 +133,8 @@ Four safety candidates were not tested: data leaving the machine, poisoned MCP t
 - Requests over the model's context are now reported as `too-large` before sending, with `decision.context` defaulting to 8,000. The estimate is 3.5 characters per token, and it is not calibrated against the host's tokenizer.
 
 - Shared building blocks. The about 40 candidates reduce to four question forms: gate (one boolean), select (one boolean per item, threshold or top-k, with a cap), choose (choice) and rate (score). They use a small set of triggers (prompt, before and after a tool, permission, context, idle, retry, compaction) and actions (allow, annotate, reject, filter context, switch model or agent, synthetic note or resume, notify, badge). Shared state builders would cover the request, the last command, recent tool calls, the diff per file and flags. The uses should be rewritten on these blocks.
-- Controls: today the uses are switched on and off only in `opencode.jsonc`. Planned: a `/decision` command (status, on/off per use, choosing the model, overrides stored in KV) and later a settings dialog and a separate picker for decision models.
+- Controls: built as the `/decisions` dialog (like `/mcps`), with per-user overrides in KV that win over config. Still open: a `/status` entry, and the web and desktop apps.
+- Checks started when a Session goes idle (claims, completion, scope) may not finish before `opencode run` exits.
 - Image input for vision decision models.
 
 Full evidence, with the commands to repeat every number, is in the prototype repo's `VALIDATION.md`.
