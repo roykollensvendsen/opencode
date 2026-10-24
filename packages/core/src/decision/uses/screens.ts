@@ -35,13 +35,39 @@ export function images(content: unknown) {
   })
 }
 
+/** Image data URLs among a prompt's file attachments; attachments given as file paths are not read here. */
+export const attached = (files: ReadonlyArray<{ readonly uri: string }> | undefined) =>
+  (files ?? []).flatMap((file) => (file.uri.startsWith("data:image/") && file.uri.length * 0.75 <= MAX_BYTES ? [file.uri] : []))
+
 export const Use = DecisionUse.define({
   id: "screens",
   title: "Check screenshots",
-  description: "When a tool returns a screenshot, tell the agent if it shows an error",
+  description: "When a tool returns or the user attaches a screenshot, tell the agent if it shows an error",
   threshold: 0.7,
   setup: (ctx, kit) =>
-    ctx.tool.hook("execute.after", (event) =>
+    Effect.gen(function* () {
+      // A screenshot the user attaches: the agent's own model may not see images, so it gets a note either way.
+      yield* ctx.session.hook("prompt", (event) =>
+        Effect.gen(function* () {
+          const settings = kit.settings()
+          const model = settings?.options.model
+          const shot = attached(event.prompt.files).at(-1)
+          if (!settings || typeof model !== "string" || !shot) return
+          const { p, result } = yield* DecisionBlocks.gate(kit, "A screenshot the user attached.", QUESTION, {
+            model,
+            images: [shot],
+          })
+          const error = p !== undefined && p >= settings.threshold
+          yield* kit.log({ source: "attachment", error, p, ms: result.ms, ...DecisionText.outcome(result) })
+          if (!error) return
+          yield* DecisionActions.note(ctx, {
+            sessionID: event.sessionID,
+            use: "screens",
+            text: `the screenshot the user attached appears to show an error (vision model p=${p.toFixed(2)}).`,
+          })
+        }),
+      )
+      yield* ctx.tool.hook("execute.after", (event) =>
       Effect.gen(function* () {
         const settings = kit.settings()
         const model = settings?.options.model
@@ -60,5 +86,6 @@ export const Use = DecisionUse.define({
           `this screenshot appears to show an error (vision model p=${p.toFixed(2)}). Look at it before reporting success.`,
         )
       }),
-    ),
+      )
+    }),
 })

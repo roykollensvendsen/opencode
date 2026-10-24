@@ -97,6 +97,8 @@ export interface SessionState {
   readonly noted: Set<string>
   /** Set by frustration for the current request. */
   frustrated?: boolean
+  /** Bumped by topics when the user starts a different task, so per-Session picks (skills, tools, files) are redone. */
+  topic: number
 }
 
 /**
@@ -168,7 +170,7 @@ export const layer = Layer.effect(
       if (found) return found
       const oldest = sessions.keys().next()
       if (sessions.size >= SESSION_LIMIT && !oldest.done) sessions.delete(oldest.value)
-      const created: SessionState = { flags: [], claimNotes: 0, recentCalls: [], noted: new Set() }
+      const created: SessionState = { flags: [], claimNotes: 0, recentCalls: [], noted: new Set(), topic: 0 }
       sessions.set(sessionID, created)
       return created
     }

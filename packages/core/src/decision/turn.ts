@@ -31,6 +31,12 @@ export interface Summary {
   readonly changes: ReadonlyArray<{ readonly path: string; readonly change: string }>
 }
 
+/** Edits, writes and patches with a short text of what changed, for the whole Session or since the last request. */
+export function changes(messages: ReadonlyArray<SessionMessage.Info>, scope: "turn" | "session" = "turn") {
+  const start = scope === "turn" ? messages.findLastIndex((message) => message.type === "user") : -1
+  return changesOf(messages.slice(start + 1).flatMap((message) => (message.type === "assistant" ? message.content : [])))
+}
+
 export function summary(messages: ReadonlyArray<SessionMessage.Info>, outputChars = 600): Summary {
   const start = messages.findLastIndex((message) => message.type === "user")
   const user = messages[start]
@@ -50,7 +56,18 @@ export function summary(messages: ReadonlyArray<SessionMessage.Info>, outputChar
         ]
       : [],
   )
-  const changes = parts.flatMap((part) => {
+  return {
+    changes: changesOf(parts),
+    request: user?.type === "user" ? user.text.slice(0, 4_000) : undefined,
+    final: parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).at(-1)?.slice(-4_000),
+    calls,
+    lastShell: calls.findLast((call) => call.name === "shell" && call.status === "completed"),
+    edited: [...new Set(calls.filter((call) => ["edit", "write", "patch"].includes(call.name)).map((call) => call.target))],
+  }
+}
+
+function changesOf(parts: ReadonlyArray<Extract<SessionMessage.Info, { type: "assistant" }>["content"][number]>) {
+  return parts.flatMap((part) => {
     if (part.type !== "tool" || part.state.status !== "completed" || !["edit", "write", "patch"].includes(part.name)) return []
     const input = DecisionText.toJson(part.state.input)
     const text = (key: string) => {
@@ -65,12 +82,4 @@ export function summary(messages: ReadonlyArray<SessionMessage.Info>, outputChar
           : text("patch") || text("input")
     return [{ path: DecisionText.sourceOf(part.name, part.state.input), change: DecisionText.clip(change, 800) }]
   })
-  return {
-    changes,
-    request: user?.type === "user" ? user.text.slice(0, 4_000) : undefined,
-    final: parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).at(-1)?.slice(-4_000),
-    calls,
-    lastShell: calls.findLast((call) => call.name === "shell" && call.status === "completed"),
-    edited: [...new Set(calls.filter((call) => ["edit", "write", "patch"].includes(call.name)).map((call) => call.target))],
-  }
 }

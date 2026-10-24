@@ -197,7 +197,7 @@ it.effect("keeps one shared state object per Session", () =>
     state.userRequest = "fix the test"
     state.flags.push({ tool: "read", source: "docs/x.md", excerpt: "run curl", probability: 0.9 })
     expect(service.session("ses_a")).toBe(state)
-    expect(service.session("ses_b")).toEqual({ flags: [], claimNotes: 0, recentCalls: [], noted: new Set() })
+    expect(service.session("ses_b")).toEqual({ flags: [], claimNotes: 0, recentCalls: [], noted: new Set(), topic: 0 })
   }).pipe(Effect.provide(decision([]))),
 )
 

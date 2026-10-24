@@ -15,6 +15,7 @@ import { TodosUse } from "@opencode/core/decision/uses/todos"
 import { ToolsUse } from "@opencode/core/decision/uses/tools"
 import { ScreensUse } from "@opencode/core/decision/uses/screens"
 import { DecisionFiles } from "@opencode/core/decision/files"
+import { CommitsUse } from "@opencode/core/decision/uses/commits"
 import { DecisionUses } from "@opencode/core/decision/uses"
 
 describe("decision uses", () => {
@@ -187,6 +188,43 @@ describe("fourth batch of uses", () => {
       ]),
     ).toEqual([png])
     expect(ScreensUse.images("no content")).toEqual([])
+  })
+})
+
+describe("last batch of uses", () => {
+  test("commits recognises git commit, also with options before the subcommand", () => {
+    expect(CommitsUse.isCommit("git commit -m 'fix'")).toBe(true)
+    expect(CommitsUse.isCommit("git -C repo commit -am x")).toBe(true)
+    expect(CommitsUse.isCommit("git add . && git commit -m x")).toBe(true)
+    expect(CommitsUse.isCommit("git log --oneline")).toBe(false)
+    expect(CommitsUse.isCommit("echo commit")).toBe(false)
+  })
+
+  test("commits takes the paths a git add in the same command stages", () => {
+    expect(CommitsUse.addedPaths("git add cart.js cart.test.js && git commit -m fix")).toEqual(["cart.js", "cart.test.js"])
+    expect(CommitsUse.addedPaths("git add -A && git commit -m x")).toEqual([])
+    expect(CommitsUse.addedPaths("git commit -m x")).toEqual([])
+  })
+
+  test("commits reads the paths of a path-limited commit and splits a patch per file", () => {
+    expect(CommitsUse.commitPaths("git commit cart.js -m \"fix the sign\"")).toEqual(["cart.js"])
+    expect(CommitsUse.commitPaths("git commit -m 'fix' -- src/a.ts src/b.ts")).toEqual(["src/a.ts", "src/b.ts"])
+    expect(CommitsUse.commitPaths("git commit -am 'fix'")).toEqual([])
+    const patch = "diff --git a/a.js b/a.js\n+one\ndiff --git a/b.js b/b.js\n+two\n"
+    expect(CommitsUse.patchOf(patch, "b.js")).toBe("diff --git a/b.js b/b.js\n+two\n")
+    expect(CommitsUse.patchOf(patch, "c.js")).toBe("")
+  })
+
+  test("commits tells -a and --all commits from staged-only ones", () => {
+    expect(CommitsUse.commitsAll("git commit -am 'fix'")).toBe(true)
+    expect(CommitsUse.commitsAll("git commit --all -m x")).toBe(true)
+    expect(CommitsUse.commitsAll("git commit -m 'add a thing'")).toBe(false)
+    expect(CommitsUse.commitsAll("git add cart.js && git commit -m fix")).toBe(false)
+  })
+
+  test("screens takes only image data URLs from prompt attachments", () => {
+    expect(ScreensUse.attached([{ uri: "data:image/png;base64,AAAA" }, { uri: "file:///a.png" }])).toEqual(["data:image/png;base64,AAAA"])
+    expect(ScreensUse.attached(undefined)).toEqual([])
   })
 })
 

@@ -33,8 +33,9 @@ export const Use = DecisionUse.define({
           const settings = kit.settings()
           const request = kit.session(event.sessionID).userRequest
           if (!settings || !request) return
+          const key = `${event.sessionID}:${kit.session(event.sessionID).topic}`
           const files =
-            picks.get(event.sessionID) ??
+            picks.get(key) ??
             (yield* Effect.gen(function* () {
               const picked =
                 (yield* DecisionFiles.pick(kit, {
@@ -44,7 +45,7 @@ export const Use = DecisionUse.define({
                   threshold: settings.threshold,
                   max: 3,
                 })) ?? []
-              picks.set(event.sessionID, picked)
+              picks.set(key, picked)
               yield* kit.log({ files: picked.join(",") || "none" })
               return picked
             }))

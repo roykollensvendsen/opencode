@@ -40,8 +40,9 @@ export const Use = DecisionUse.define({
             .map(([name, tool]) => ({ name, description: tool.description.slice(0, 200) }))
           const min = typeof settings.options.min === "number" ? settings.options.min : 10
           if (offered.length < min) return
+          const key = `${event.sessionID}:${kit.session(event.sessionID).topic}`
           const keep =
-            chosen.get(event.sessionID) ??
+            chosen.get(key) ??
             (yield* Effect.gen(function* () {
               const picked = yield* DecisionBlocks.select(kit, {
                 state: { user_message: DecisionText.clip(request, DecisionText.budget(kit.limit(), 0.3)) },
@@ -50,7 +51,7 @@ export const Use = DecisionUse.define({
                 threshold: settings.threshold,
               })
               const result: ReadonlySet<string> | "all" = picked.chosen ? new Set(picked.chosen.map((tool) => tool.name)) : "all"
-              chosen.set(event.sessionID, result)
+              chosen.set(key, result)
               yield* kit.log({
                 offered: offered.length,
                 kept: result === "all" ? "all" : [...result].join(","),
