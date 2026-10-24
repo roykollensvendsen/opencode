@@ -2,6 +2,7 @@ export * as EffortUse from "./effort.js"
 
 import { Effect } from "effect"
 import { Model } from "../../model.js"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -55,9 +56,7 @@ export const Use = DecisionUse.define({
           const info = yield* models.get(base.providerID, base.id)
           const variants = info?.variants.map((variant) => variant.id) ?? []
           if (variants.length < 2) return yield* kit.log({ skipped: "model has no reasoning variants", model: base.id })
-          const result = yield* kit.ask({ user_request: event.prompt.text.slice(0, 4_000) }, { difficulty: QUESTION })
-          const answer = result.status === "ok" ? result.answers.difficulty : undefined
-          const score = answer?.type === "score" ? answer.score : undefined
+          const { score, result } = yield* DecisionBlocks.rate(kit, { user_request: event.prompt.text.slice(0, 4_000) }, QUESTION)
           const variant = score === undefined ? base.variant : pick(variants, base.variant, score, settings.threshold)
           state.baseModel = base
           if (variant !== session?.model?.variant)

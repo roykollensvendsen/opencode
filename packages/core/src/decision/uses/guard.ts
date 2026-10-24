@@ -2,7 +2,7 @@ export * as GuardUse from "./guard.js"
 
 import { Tool } from "@opencode/schema/tool"
 import { Effect } from "effect"
-import { Decision } from "../../decision.js"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -66,7 +66,8 @@ export const Use = DecisionUse.define({
                   Object.entries(input).map(([key, value]) => [key, typeof value === "string" ? DecisionText.clip(value, room) : value]),
                 )
               : (input ?? null)
-          const result = yield* kit.ask(
+          const { p, result } = yield* DecisionBlocks.gate(
+            kit,
             {
               user_request: DecisionText.clip(state.userRequest ?? "(unknown)", room),
               tool: event.tool,
@@ -75,9 +76,8 @@ export const Use = DecisionUse.define({
                 ? { command: state.lastCommand.command, output: DecisionText.clip(state.lastCommand.output, room) }
                 : null,
             },
-            { weakens: QUESTION },
+            QUESTION,
           )
-          const p = Decision.probability(result, "weakens")
           const blocked = p !== undefined && p >= settings.threshold
           yield* kit.log({ tool: event.tool, source: DecisionText.sourceOf(event.tool, event.input), blocked, p, ms: result.ms, ...DecisionText.outcome(result) })
           if (blocked) return yield* new Tool.Error({ message: rejection(p) })

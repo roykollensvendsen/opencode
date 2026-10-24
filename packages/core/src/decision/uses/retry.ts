@@ -1,7 +1,7 @@
 export * as RetryUse from "./retry.js"
 
 import { Effect } from "effect"
-import { Decision } from "../../decision.js"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -26,23 +26,23 @@ export const stops = (willSucceed: number | undefined, threshold: number) =>
   willSucceed !== undefined && willSucceed <= 1 - threshold
 
 export const Use = DecisionUse.define({
-  id: "retry",
+  id: "retries",
   threshold: 0.9,
   setup: (ctx, kit) =>
     ctx.session.hook("retry", (event) =>
       Effect.gen(function* () {
         const settings = kit.settings()
         if (!settings || !event.decision.retry) return
-        const result = yield* kit.ask(
+        const { p, result } = yield* DecisionBlocks.gate(
+          kit,
           {
             type: event.error.type,
             status: event.error.status ?? null,
             message: event.error.message,
             body: event.error.response?.body.slice(0, 2_000) ?? null,
           },
-          { will_succeed: QUESTION },
+          QUESTION,
         )
-        const p = Decision.probability(result, "will_succeed")
         const stop = stops(p, settings.threshold)
         if (stop) event.decision = { retry: false }
         yield* kit.log({ attempt: event.attempt, status: event.error.status, stop, p, ms: result.ms, ...DecisionText.outcome(result) })

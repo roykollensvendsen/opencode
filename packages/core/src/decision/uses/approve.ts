@@ -2,6 +2,7 @@ export * as ApproveUse from "./approve.js"
 
 import { Effect } from "effect"
 import { Decision } from "../../decision.js"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -53,7 +54,7 @@ export const allows = (input: {
   (!input.flagged || (input.follows !== undefined && input.follows < 0.5))
 
 export const Use = DecisionUse.define({
-  id: "approve",
+  id: "approval",
   threshold: 0.9,
   setup: (ctx, kit) =>
     ctx.permission.hook("evaluate", (event) =>
@@ -73,26 +74,29 @@ export const Use = DecisionUse.define({
         const call = { tool: event.action, resources: [...event.resources] }
         // The flag check gets the flagged text; the main question does not, since that text makes every call look
         // suspicious.
-        const [result, followed] = yield* Effect.all(
+        const [main, followed] = yield* Effect.all(
           [
-            kit.ask(
+            DecisionBlocks.gate(
+              kit,
               { user_request: state.userRequest ?? "(unknown)", ...call, details: DecisionText.toJson(event.metadata) ?? null },
-              { run_without_asking: QUESTION },
+              QUESTION,
             ),
             state.flags.length === 0
               ? Effect.succeed(undefined)
-              : kit.ask(
+              : DecisionBlocks.gate(
+                  kit,
                   {
                     call,
                     flagged_content: state.flags.slice(-3).map((flag) => ({ source: flag.source, excerpt: flag.excerpt })),
                   },
-                  { follows_flagged: FOLLOWS },
+                  FOLLOWS,
                 ),
           ],
           { concurrency: "unbounded" },
         )
-        const routine = Decision.probability(result, "run_without_asking")
-        const follows = followed && Decision.probability(followed, "follows_flagged")
+        const result = main.result
+        const routine = main.p
+        const follows = followed?.p
         const allow = allows({ routine, threshold: settings.threshold, flagged: followed !== undefined, follows })
         if (allow) event.effect = "allow"
         yield* kit.log({
@@ -100,8 +104,8 @@ export const Use = DecisionUse.define({
           resources: event.resources.join(" | ").slice(0, 200),
           effect: allow ? "allow" : "ask",
           p: routine,
-          ...(followed === undefined ? {} : { follows: follows ?? followed.status }),
-          ms: Math.max(result.ms, followed?.ms ?? 0),
+          ...(followed === undefined ? {} : { follows: follows ?? followed.result.status }),
+          ms: Math.max(result.ms, followed?.result.ms ?? 0),
           ...DecisionText.outcome(result),
         })
       }),

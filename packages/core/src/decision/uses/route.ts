@@ -2,6 +2,7 @@ export * as RouteUse from "./route.js"
 
 import { Agent } from "@opencode/schema/agent"
 import { Effect } from "effect"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -24,7 +25,7 @@ export const routes = (probabilities: Readonly<Record<string, number>> | undefin
   (probabilities?.plan ?? 0) >= threshold
 
 export const Use = DecisionUse.define({
-  id: "route",
+  id: "routing",
   threshold: 0.9,
   setup: (ctx, kit) =>
     ctx.session.hook("prompt", (event) =>
@@ -35,9 +36,12 @@ export const Use = DecisionUse.define({
         if (messages.some((message) => message.type === "user")) return
         const session = yield* ctx.session.get({ sessionID: event.sessionID }).pipe(Effect.orElseSucceed(() => undefined))
         if (session?.agent !== undefined && session.agent !== "build") return
-        const result = yield* kit.ask({ user_request: event.prompt.text.slice(0, 4_000) }, { start: QUESTION })
-        const answer = result.status === "ok" ? result.answers.start : undefined
-        const probabilities = answer?.type === "choice" ? answer.probabilities : undefined
+        const { probabilities, result } = yield* DecisionBlocks.choose(
+          kit,
+          { user_request: event.prompt.text.slice(0, 4_000) },
+          QUESTION,
+          settings.threshold,
+        )
         const plan = routes(probabilities, settings.threshold)
         if (plan)
           yield* ctx.session.switchAgent({ sessionID: event.sessionID, agent: Agent.ID.make("plan") }).pipe(Effect.ignore)

@@ -1,8 +1,8 @@
 export * as ClaimsUse from "./claims.js"
 
 import { Effect, Stream } from "effect"
-import { Decision } from "../../decision.js"
 import type { SessionMessage } from "../../session/message.js"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -61,8 +61,7 @@ export const Use = DecisionUse.define({
           if (!settings || state.claimNotes > 0) return
           const last = lastTurn(yield* ctx.session.context({ sessionID }).pipe(Effect.orElseSucceed(() => [])))
           if (!last) return yield* kit.log({ skipped: "no final message with a shell command after it" })
-          const result = yield* kit.ask({ final_message: last.text, last_command: last.command }, { contradicted: QUESTION })
-          const p = Decision.probability(result, "contradicted")
+          const { p, result } = yield* DecisionBlocks.gate(kit, { final_message: last.text, last_command: last.command }, QUESTION)
           const contradicted = p !== undefined && p >= settings.threshold
           yield* kit.log({ contradicted, p, command: last.command.command.slice(0, 100), ms: result.ms, ...DecisionText.outcome(result) })
           if (!contradicted) return

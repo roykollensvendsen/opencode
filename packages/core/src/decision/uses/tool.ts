@@ -21,7 +21,7 @@ const Input = Schema.Struct({
 })
 
 export const Use = DecisionUse.define({
-  id: "tool",
+  id: "decide",
   threshold: 0,
   setup: (ctx, kit) =>
     ctx.tool.transform((editor) => {

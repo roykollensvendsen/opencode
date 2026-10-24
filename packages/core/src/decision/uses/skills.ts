@@ -2,7 +2,7 @@ export * as SkillsUse from "./skills.js"
 
 import { Message, type SystemPart } from "@opencode/ai"
 import { Effect } from "effect"
-import { Decision } from "../../decision.js"
+import { DecisionBlocks } from "../blocks.js"
 import { DecisionText } from "../text.js"
 import { DecisionUse } from "../use.js"
 
@@ -65,27 +65,20 @@ const choose = Effect.fnUntraced(function* (
   threshold: number,
 ) {
   if (skills.length === 0) return undefined
-  const result = yield* kit.ask(
-    { user_message: request },
-    Object.fromEntries(
-      skills.map((skill, i) => [
-        `s${i}`,
-        {
-          type: "boolean",
-          instructions: `Will the "${skill.id}" skill (${skill.description}) be useful for handling this request?`,
-        } as const,
-      ]),
-    ),
-  )
-  const chosen: ReadonlySet<string> | "all" =
-    result.status === "ok"
-      ? new Set(skills.filter((_, i) => (Decision.probability(result, `s${i}`) ?? 0) >= threshold).map((skill) => skill.id))
-      : "all"
+  const picked = yield* DecisionBlocks.select(kit, {
+    state: { user_message: request },
+    items: skills,
+    question: (skill) => ({
+      instructions: `Will the "${skill.id}" skill (${skill.description}) be useful for handling this request?`,
+    }),
+    threshold,
+  })
+  const result = picked.result
+  const chosen: ReadonlySet<string> | "all" = picked.chosen ? new Set(picked.chosen.map((skill) => skill.id)) : "all"
   yield* kit.log({
     offered: skills.map((skill) => skill.id).join(","),
     kept: chosen === "all" ? "all" : [...chosen].join(","),
-    ms: result.ms,
-    ...DecisionText.outcome(result),
+    ...(result ? { ms: result.ms, ...DecisionText.outcome(result) } : {}),
   })
   return chosen
 })
