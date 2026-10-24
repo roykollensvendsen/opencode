@@ -5,16 +5,13 @@ import { NonNegativeInt, optional } from "../schema.js"
 
 const Probability = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }))
 
-export class Purpose extends Schema.Class<Purpose>("Config.Decision.Purpose")({
+export class Use extends Schema.Class<Use>("Config.Decision.Use")({
   enabled: Schema.Boolean.pipe(optional).annotate({ description: "Turn this use of the decision model on or off" }),
-  threshold: Probability.pipe(optional).annotate({ description: "Probability the answer needs before it is acted on" }),
-}) {}
-
-export class Claims extends Schema.Class<Claims>("Config.Decision.Claims")({
-  enabled: Schema.Boolean.pipe(optional).annotate({ description: "Turn this use of the decision model on or off" }),
-  threshold: Probability.pipe(optional).annotate({ description: "Probability the answer needs before it is acted on" }),
-  resume: Schema.Boolean.pipe(optional).annotate({
-    description: "Let the agent continue after a contradicted claim instead of only leaving a note",
+  threshold: Probability.pipe(optional).annotate({
+    description: "Probability the answer needs before it is acted on; each use has its own default",
+  }),
+  options: Schema.Record(Schema.String, Schema.Json).pipe(optional).annotate({
+    description: "Settings specific to this use",
   }),
 }) {}
 
@@ -24,12 +21,8 @@ export class Info extends Schema.Class<Info>("Config.Decision")({
   }),
   timeout: NonNegativeInt.pipe(optional).annotate({ description: "Milliseconds before a decision counts as unavailable" }),
   max_questions: NonNegativeInt.pipe(optional).annotate({ description: "Questions the model accepts per request" }),
-  approve: Purpose.pipe(optional).annotate({ description: "Allow routine tool calls that would otherwise ask" }),
-  screen: Purpose.pipe(optional).annotate({ description: "Flag tool results that try to instruct the agent" }),
-  skills: Purpose.pipe(optional).annotate({ description: "Offer only the skills relevant to the session's request" }),
-  tool: Purpose.pipe(optional).annotate({ description: "Give the agent a decide tool for its own typed questions" }),
-  claims: Claims.pipe(optional).annotate({
-    description: "When a Session goes idle, check the agent's last message against the last command output",
+  uses: Schema.Record(Schema.String, Use).pipe(optional).annotate({
+    description:
+      "Uses of the decision model by ID (approve, screen, skills, tool, claims, retry, effort, guard, route); each is off unless enabled",
   }),
-  retry: Purpose.pipe(optional).annotate({ description: "Stop retrying model errors that retrying will not fix" }),
 }) {}

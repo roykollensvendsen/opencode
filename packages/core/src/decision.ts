@@ -15,6 +15,7 @@ import { createHash } from "node:crypto"
 import { Credential } from "./credential.js"
 import { requestExecutor } from "./effect/app-node-platform.js"
 import { Integration } from "./integration.js"
+import type { Model } from "./model.js"
 import { Provider } from "./provider.js"
 
 /**
@@ -76,6 +77,10 @@ export interface SessionState {
   skills?: ReadonlySet<string> | "all"
   /** Contradicted claims already reported, so the claim check never loops. */
   claimNotes: number
+  /** The last shell command the agent ran and the end of its output. */
+  lastCommand?: { readonly command: string; readonly output: string }
+  /** The model the Session used before a use changed its variant, so it can be restored. */
+  baseModel?: Model.Ref
 }
 
 export interface Interface {
