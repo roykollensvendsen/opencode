@@ -31,6 +31,28 @@ All numbers are for `decisionmodels/reax-1` on hand-written labelled sets. Each 
 | guard: reject edits that weaken tests or checks | `tool.execute.before` | Hard 8/10 alone, **6/6 with the request and the last test output** | regex 4/10 hard |
 | route: send large or ambiguous first requests to `plan` | `session.prompt` + `switchAgent` | Hard 8/8; live it routed to plan | keywords 0/8 hard |
 
+## Candidates tested offline, not built
+
+These are labelled sets with baselines, run on reax-1 (prototype repo commits d846b7d, 1152ba2 and b4037e8). Each row gives the result on hard cases.
+
+| Candidate | Model | Baseline | Verdict |
+|---|---|---|---|
+| MCP tool selection | 13/14 found | keywords 2/14 | build; once per Session, 9 requests |
+| Small or large model | 7/7 | word count 0/7 | build |
+| Voice command (Norwegian and English mixed) | 19/20 | word list 11/20 | build; ambiguous replies are asked again |
+| Compaction: what to keep | 5/5 (19/20 overall) | keep the last 4: 10/20 | build |
+| Off-scope file change | 6/6 | path words 2/6 | build |
+| Needless question to the user | 6/6 | word overlap 2/6 | build; needs the instructions and rules |
+| Notify: needs you, done or failed | 6/6 | keywords 3/6 | build |
+| Done, partial or blocked | 5/5 | keywords 3/5 | build |
+| Stuck agent | 5/5 | repeat count 3/5 | build |
+| Session category | 9/9 | keywords 6/9 | low value |
+| Forgot to run tests | 6/6 | rule 5/6 | rule first |
+| Delegate | 5/5 | keywords 4/5 | little gain |
+| Suggest always-allow | 6/6 | allowlist 5/6 | no gain |
+
+Four safety candidates were not tested: data leaving the machine, poisoned MCP tool descriptions, instruction-file scanning and suspicious packages. Writing realistic attack cases was stopped by a safety filter. They need cases written by the user or a public benchmark.
+
 ## Rejected along the way
 
 - **A. Plugin only.** A V2 plugin can't use OpenCode's provider credentials, so its keys came from environment variables. It also can't see where an instruction came from. In both live injection scenarios it was the chat model that stopped the attack, not the plugin gate. That moved the work into Core.
@@ -51,3 +73,7 @@ All numbers are for `decisionmodels/reax-1` on hand-written labelled sets. Each 
 - Decision models never reach the catalogue, so model limits (questions per request, context) come from config. models.dev has no `limit.questions`.
 - Unit tests cover the service and the pure decision functions (18 tests). They do not cover each use's hook wiring or the loader.
 - There is no API for external plugins (`ctx.decision.ask`) and no `opencode decide` command.
+- Several parallel callers on one key hit HTTP 429. The service may need a per-host concurrency limit.
+- Requests over the model's context are now reported as `too-large` before sending, with `decision.context` defaulting to 8,000. The estimate is 3.5 characters per token, and it is not calibrated against the host's tokenizer.
+
+Full evidence, with the commands to repeat every number, is in the prototype repo's `VALIDATION.md`.
