@@ -74,7 +74,7 @@ Four safety candidates were not tested: data leaving the machine, poisoned MCP t
 
 ## Built after the candidate rounds
 
-There are now 22 uses, each a module under `decision/uses/`:
+There are now 26 uses, each a module under `decision/uses/`:
 - approval
 - screening
 - skills
@@ -97,17 +97,18 @@ There are now 22 uses, each a module under `decision/uses/`:
 - todos
 - tools
 - fallback
+- reading
+- testing
+- compaction
+- screens
 
 They are built from four shared blocks (gate, select, choose, rate), shared actions (note, annotate, reject) and a shared turn summary. Every use is off unless enabled, and is switched in `/decisions` or `decision.uses.<id>`. Live results and what is not yet verified are in the prototype repo's `VALIDATION.md`.
 
-Not built yet:
-- voice (needs the voice pipeline)
-- notify (needs a notification channel)
-- compaction (`session.compaction` hook)
-- screenshot checks (need image input in `Decision.ask`)
-- test-select and read-first
+`Decision.ask` takes images and a per-call model, so `screens` can ask a vision model.
 
-lsp-diag waits for OpenCode's LSP runtime.
+Not built:
+- voice and notify, which live in the web and desktop clients, not core
+- lsp-diag, which waits for OpenCode's LSP runtime
 
 ## Rejected along the way
 
