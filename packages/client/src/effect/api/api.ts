@@ -1860,6 +1860,75 @@ export interface SkillApi<E = never> {
   readonly list: SkillListOperation<E>
 }
 
+export type DecisionStatusInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
+export type DecisionStatusOutput = {
+  readonly location: Location.PublicRef
+  readonly data: {
+    readonly model?: string | undefined
+    readonly modelSource: "override" | "config" | "none"
+    readonly uses: ReadonlyArray<{
+      readonly id: string
+      readonly title: string
+      readonly description: string
+      readonly enabled: boolean
+      readonly source: "override" | "config" | "default"
+      readonly threshold: number
+      readonly last?:
+        | {
+            readonly status: "ok" | "unavailable"
+            readonly reason?: "not-configured" | "no-credential" | "too-large" | "deadline" | "error" | undefined
+            readonly ms: number
+            readonly at: number
+          }
+        | undefined
+    }>
+  }
+}
+export type DecisionStatusOperation<E = never> = (input?: DecisionStatusInput) => Effect.Effect<DecisionStatusOutput, E>
+
+export type DecisionUpdateInput = {
+  readonly location?: { readonly directory?: string | undefined } | undefined
+  readonly model?: string | null | undefined
+  readonly uses?: { readonly [x: string]: boolean | null } | undefined
+}
+export type DecisionUpdateOutput = {
+  readonly location: Location.PublicRef
+  readonly data: {
+    readonly model?: string | undefined
+    readonly modelSource: "override" | "config" | "none"
+    readonly uses: ReadonlyArray<{
+      readonly id: string
+      readonly title: string
+      readonly description: string
+      readonly enabled: boolean
+      readonly source: "override" | "config" | "default"
+      readonly threshold: number
+      readonly last?:
+        | {
+            readonly status: "ok" | "unavailable"
+            readonly reason?: "not-configured" | "no-credential" | "too-large" | "deadline" | "error" | undefined
+            readonly ms: number
+            readonly at: number
+          }
+        | undefined
+    }>
+  }
+}
+export type DecisionUpdateOperation<E = never> = (input?: DecisionUpdateInput) => Effect.Effect<DecisionUpdateOutput, E>
+
+export type DecisionModelsInput = {
+  readonly location?: { readonly directory?: string | undefined } | undefined
+  readonly provider?: string | undefined
+}
+export type DecisionModelsOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<string> }
+export type DecisionModelsOperation<E = never> = (input?: DecisionModelsInput) => Effect.Effect<DecisionModelsOutput, E>
+
+export interface DecisionApi<E = never> {
+  readonly status: DecisionStatusOperation<E>
+  readonly update: DecisionUpdateOperation<E>
+  readonly models: DecisionModelsOperation<E>
+}
+
 export type RpcCallInput = {
   readonly rpcID: string
   readonly method: string
@@ -2367,6 +2436,7 @@ export interface AppApi<E = never> {
   readonly file: FileApi<E>
   readonly command: CommandApi<E>
   readonly skill: SkillApi<E>
+  readonly decision: DecisionApi<E>
   readonly rpc: RpcApi<E>
   readonly event: EventApi<E>
   readonly pty: PtyApi<E>

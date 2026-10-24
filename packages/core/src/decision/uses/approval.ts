@@ -55,6 +55,8 @@ export const allows = (input: {
 
 export const Use = DecisionUse.define({
   id: "approval",
+  title: "Approve routine actions",
+  description: "Allow routine tool calls that would otherwise ask you",
   threshold: 0.9,
   setup: (ctx, kit) =>
     ctx.permission.hook("evaluate", (event) =>

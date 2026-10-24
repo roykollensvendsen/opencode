@@ -25,6 +25,8 @@ export const warning = (tool: string, p: number) =>
 
 export const Use = DecisionUse.define({
   id: "screening",
+  title: "Screen tool results",
+  description: "Warn when a tool result tries to give the agent instructions",
   threshold: 0.5,
   setup: (ctx, kit) =>
     ctx.tool.hook("execute.after", (event) =>

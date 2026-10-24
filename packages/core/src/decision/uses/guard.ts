@@ -39,6 +39,8 @@ export const rejection = (p: number) =>
 
 export const Use = DecisionUse.define({
   id: "guard",
+  title: "Guard tests and checks",
+  description: "Reject edits that weaken tests or checks instead of fixing the code",
   threshold: 0.7,
   setup: (ctx, kit) =>
     Effect.gen(function* () {

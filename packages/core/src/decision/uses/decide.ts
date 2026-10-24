@@ -22,6 +22,8 @@ const Input = Schema.Struct({
 
 export const Use = DecisionUse.define({
   id: "decide",
+  title: "Decide tool",
+  description: "Give the agent a tool for its own yes/no, choice and score questions",
   threshold: 0,
   setup: (ctx, kit) =>
     ctx.tool.transform((editor) => {

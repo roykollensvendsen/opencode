@@ -13,6 +13,10 @@ import type { PluginInternal } from "../plugin/internal.js"
  */
 export interface Use {
   readonly id: string
+  /** Short name shown in the UI, e.g. "Approve routine actions". */
+  readonly title: string
+  /** One line on what the use does, shown next to the title. */
+  readonly description: string
   /** Default probability threshold; `decision.uses.<id>.threshold` overrides it. */
   readonly threshold: number
   readonly setup: (ctx: Context, kit: Kit) => Effect.Effect<void, never, PluginInternal.Requirements | Scope.Scope>

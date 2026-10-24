@@ -199,6 +199,12 @@ import type {
   CommandListOutput,
   SkillListInput,
   SkillListOutput,
+  DecisionStatusInput,
+  DecisionStatusOutput,
+  DecisionUpdateInput,
+  DecisionUpdateOutput,
+  DecisionModelsInput,
+  DecisionModelsOutput,
   RpcCallInput,
   RpcCallOutput,
   EventSubscribeOutput,
@@ -1290,6 +1296,32 @@ const EndpointSkillList = (raw: RawClient["server.skill"]) => (input?: SkillList
 
 const adaptGroupSkill = (raw: RawClient["server.skill"]) => ({ list: EndpointSkillList(raw) })
 
+const EndpointDecisionStatus = (raw: RawClient["server.decision"]) => (input?: DecisionStatusInput) =>
+  preserveEffect<DecisionStatusOutput>()(
+    raw["decision.status"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
+  )
+
+const EndpointDecisionUpdate = (raw: RawClient["server.decision"]) => (input?: DecisionUpdateInput) =>
+  preserveEffect<DecisionUpdateOutput>()(
+    raw["decision.update"]({
+      query: { location: input?.["location"] },
+      payload: { model: input?.["model"], uses: input?.["uses"] },
+    }).pipe(Effect.mapError(mapClientError)),
+  )
+
+const EndpointDecisionModels = (raw: RawClient["server.decision"]) => (input?: DecisionModelsInput) =>
+  preserveEffect<DecisionModelsOutput>()(
+    raw["decision.models"]({ query: { location: input?.["location"], provider: input?.["provider"] } }).pipe(
+      Effect.mapError(mapClientError),
+    ),
+  )
+
+const adaptGroupDecision = (raw: RawClient["server.decision"]) => ({
+  status: EndpointDecisionStatus(raw),
+  update: EndpointDecisionUpdate(raw),
+  models: EndpointDecisionModels(raw),
+})
+
 const EndpointRpcCall = (raw: RawClient["server.rpc"]) => (input: RpcCallInput) =>
   preserveEffect<RpcCallOutput>()(
     raw["rpc.call"]({
@@ -1695,6 +1727,7 @@ const adaptClient = (raw: RawClient) => ({
   file: adaptGroupFile(raw["server.fs"]),
   command: adaptGroupCommand(raw["server.command"]),
   skill: adaptGroupSkill(raw["server.skill"]),
+  decision: adaptGroupDecision(raw["server.decision"]),
   rpc: adaptGroupRpc(raw["server.rpc"]),
   event: adaptGroupEvent(raw["server.event"]),
   pty: adaptGroupPty(raw["server.pty"]),

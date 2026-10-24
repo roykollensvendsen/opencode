@@ -10,11 +10,14 @@ import {
 import { TypeSafeAI } from "@opencode/ai/providers/typesafe-ai"
 import { RequestExecutor } from "@opencode/ai/route"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
-import { Context, Duration, Effect, Layer } from "effect"
+import { httpClient } from "@opencode/util/effect/app-node-platform"
+import { Context, Duration, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
+import { HttpClient, HttpClientRequest } from "effect/http"
 import { createHash } from "node:crypto"
 import { Credential } from "./credential.js"
 import { requestExecutor } from "./effect/app-node-platform.js"
 import { Integration } from "./integration.js"
+import { KV } from "./kv.js"
 import type { Model } from "./model.js"
 import { Provider } from "./provider.js"
 
@@ -87,8 +90,39 @@ export interface SessionState {
   baseModel?: Model.Ref
 }
 
+/**
+ * Choices made from the UI, stored per user so they survive restarts. They win over config; clearing one (null) lets
+ * config decide again.
+ */
+export interface Overrides {
+  readonly model?: string
+  readonly uses: Readonly<Record<string, boolean>>
+}
+
+export interface OverridesPatch {
+  readonly model?: string | null
+  readonly uses?: Readonly<Record<string, boolean | null>>
+}
+
+/** How the last request for a purpose went, for status displays. */
+export interface Outcome {
+  readonly status: Result["status"]
+  readonly reason?: Extract<Result, { status: "unavailable" }>["reason"]
+  readonly ms: number
+  readonly at: number
+}
+
 export interface Interface {
   readonly ask: (input: AskInput) => Effect.Effect<Result>
+  readonly controls: {
+    readonly current: () => Overrides
+    readonly set: (patch: OverridesPatch) => Effect.Effect<Overrides>
+    /** Emits after every change, so consumers that registered something (a tool) can re-register. */
+    readonly changes: Stream.Stream<Overrides>
+  }
+  readonly last: (purpose: string) => Outcome | undefined
+  /** Model IDs the provider's host lists at `{baseURL}/models`, or undefined when it cannot be reached. */
+  readonly models: (providerID: string) => Effect.Effect<ReadonlyArray<string> | undefined>
   /** Shared, in-memory state for one Session; created on first use. */
   readonly session: (sessionID: string) => SessionState
 }
@@ -102,6 +136,7 @@ export const DEFAULT_CONTEXT_TOKENS = 8_000
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_LIMIT = 500
 const SESSION_LIMIT = 200
+const OVERRIDES_KEY = "decision/overrides"
 
 export const layer = Layer.effect(
   Service,
@@ -109,6 +144,12 @@ export const layer = Layer.effect(
     const executor = yield* RequestExecutor.Service
     const integrations = yield* Integration.Service
     const providers = yield* Provider.Service
+    const kv = yield* KV.Service
+    const http = yield* HttpClient.HttpClient
+    const outcomes = new Map<string, Outcome>()
+    const stored = Option.getOrUndefined(Schema.decodeUnknownOption(StoredOverrides)(yield* kv.get(OVERRIDES_KEY)))
+    const overrides = { current: stored ?? { uses: {} } }
+    const changed = yield* PubSub.unbounded<Overrides>()
     const cache = new Map<string, { readonly expires: number; readonly result: Extract<Result, { status: "ok" }> }>()
     const sessions = new Map<string, SessionState>()
     const session = (sessionID: string) => {
@@ -134,7 +175,51 @@ export const layer = Layer.effect(
       return { apiKey, baseURL: typeof baseURL === "string" ? expandEnv(baseURL) : undefined, headers: provider?.headers }
     })
 
-    const ask = Effect.fn("Decision.ask")(function* (input: AskInput) {
+    const ask = (input: AskInput) =>
+      answer(input).pipe(
+        Effect.tap((result) =>
+          Effect.sync(() =>
+            outcomes.set(input.purpose, {
+              status: result.status,
+              ...(result.status === "unavailable" ? { reason: result.reason } : {}),
+              ms: result.ms,
+              at: Date.now(),
+            }),
+          ),
+        ),
+      )
+
+    const controls = {
+      current: () => overrides.current,
+      set: Effect.fn("Decision.controls.set")(function* (patch: OverridesPatch) {
+        const uses = Object.fromEntries(
+          Object.entries({ ...overrides.current.uses, ...patch.uses }).flatMap(([id, value]) =>
+            typeof value === "boolean" ? [[id, value]] : [],
+          ),
+        )
+        const model = patch.model === undefined ? overrides.current.model : (patch.model ?? undefined)
+        overrides.current = { ...(model ? { model } : {}), uses }
+        yield* kv.set(OVERRIDES_KEY, overrides.current)
+        yield* PubSub.publish(changed, overrides.current)
+        return overrides.current
+      }),
+      changes: Stream.fromPubSub(changed),
+    }
+
+    const models = Effect.fn("Decision.models")(function* (providerID: string) {
+      const { apiKey, baseURL } = yield* access(providerID)
+      if (!apiKey || !baseURL) return undefined
+      const response = yield* http
+        .execute(HttpClientRequest.get(`${baseURL.replace(/\/$/, "")}/models`).pipe(HttpClientRequest.bearerToken(apiKey)))
+        .pipe(
+          Effect.flatMap((res) => res.json),
+          Effect.timeout(Duration.seconds(10)),
+          Effect.orElseSucceed(() => undefined),
+        )
+      return Option.getOrUndefined(Schema.decodeUnknownOption(ModelList)(response))?.data.map((model) => model.id)
+    })
+
+    const answer = Effect.fn("Decision.ask")(function* (input: AskInput) {
       const started = Date.now()
       const elapsed = () => Date.now() - started
       const slash = input.model.indexOf("/")
@@ -216,14 +301,14 @@ export const layer = Layer.effect(
       return result
     })
 
-    return Service.of({ ask, session })
+    return Service.of({ ask, session, controls, last: (purpose) => outcomes.get(purpose), models })
   }),
 )
 
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Integration.node, Provider.node, requestExecutor],
+  deps: [Integration.node, Provider.node, KV.node, httpClient, requestExecutor],
 })
 
 /**
@@ -247,6 +332,13 @@ const apiKeyOf = (credential: Credential.Value) =>
   credential.type === "key" ? credential.key : credential.type === "oauth" ? credential.access : undefined
 
 const expandEnv = (value: string) => value.replace(/\$\{([A-Z0-9_]+)\}/g, (_, name: string) => process.env[name] ?? "")
+
+const StoredOverrides = Schema.Struct({
+  model: Schema.optional(Schema.String),
+  uses: Schema.Record(Schema.String, Schema.Boolean),
+})
+
+const ModelList = Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) })
 
 const canonical = (value: unknown): string =>
   Array.isArray(value)

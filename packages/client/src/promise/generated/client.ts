@@ -197,6 +197,12 @@ import type {
   CommandListOutput,
   SkillListInput,
   SkillListOutput,
+  DecisionStatusInput,
+  DecisionStatusOutput,
+  DecisionUpdateInput,
+  DecisionUpdateOutput,
+  DecisionModelsInput,
+  DecisionModelsOutput,
   RpcCallInput,
   RpcCallOutput,
   EventSubscribeOutput,
@@ -1754,6 +1760,45 @@ export function make(options: ClientOptions) {
             method: "GET",
             path: `/api/skill`,
             query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    decision: {
+      status: (input?: DecisionStatusInput, requestOptions?: RequestOptions) =>
+        request<DecisionStatusOutput>(
+          {
+            method: "GET",
+            path: `/api/experimental/decision`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input?: DecisionUpdateInput, requestOptions?: RequestOptions) =>
+        request<DecisionUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/api/experimental/decision`,
+            query: { location: input?.["location"] },
+            body: { model: input?.["model"], uses: input?.["uses"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      models: (input?: DecisionModelsInput, requestOptions?: RequestOptions) =>
+        request<DecisionModelsOutput>(
+          {
+            method: "GET",
+            path: `/api/experimental/decision/models`,
+            query: { location: input?.["location"], provider: input?.["provider"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
             empty: false,

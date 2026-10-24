@@ -49,6 +49,8 @@ export const note = (command: string, p: number) =>
 
 export const Use = DecisionUse.define({
   id: "claims",
+  title: "Check claims",
+  description: "Note when the agent claims success the last command contradicts",
   threshold: 0.7,
   setup: (ctx, kit) =>
     ctx.event.subscribe().pipe(

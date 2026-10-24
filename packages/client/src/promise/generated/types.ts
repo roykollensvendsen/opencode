@@ -264,6 +264,15 @@ export type PermissionSavedID = string
 
 export type CommandInfo = { name: string; description?: string }
 
+export type DecisionSource = "override" | "config" | "default"
+
+export type DecisionOutcome = {
+  status: "ok" | "unavailable"
+  reason?: "not-configured" | "no-credential" | "too-large" | "deadline" | "error" | undefined
+  ms: number
+  at: number
+}
+
 export type RpcOutput = { output?: any }
 
 export type PermissionReply = "once" | "always" | "reject"
@@ -746,6 +755,16 @@ export type PermissionSavedInfo = {
   action: string
   resource: string
   time: { created: number; updated: number }
+}
+
+export type DecisionUseStatus = {
+  id: string
+  title: string
+  description: string
+  enabled: boolean
+  source: DecisionSource
+  threshold: number
+  last?: DecisionOutcome | undefined
 }
 
 export type Pty = {
@@ -1997,6 +2016,12 @@ export type CredentialValue = CredentialOAuth | CredentialKey | CredentialExtern
 
 export type ConnectionInfo = ConnectionCredentialInfo | ConnectionEnvInfo
 
+export type DecisionStatus = {
+  model?: string | undefined
+  modelSource: "override" | "config" | "none"
+  uses: Array<DecisionUseStatus>
+}
+
 export type PtyCreated = {
   id: EventID
   created: number
@@ -2270,6 +2295,13 @@ export type ConfigEntry =
           }
         }
         compaction?: { auto?: boolean; keep?: { tokens?: number }; buffer?: number }
+        decision?: {
+          model?: string
+          timeout?: number
+          max_questions?: number
+          context?: number
+          uses?: { [x: string]: { enabled?: boolean; threshold?: number; options?: { [x: string]: JsonValue } } }
+        }
         skills?: Array<string>
         commands?: {
           [x: string]: {
@@ -5594,6 +5626,39 @@ export type SkillListInput = {
 }
 
 export type SkillListOutput = { location: LocationPublicRef; data: Array<SkillInfo> }
+
+export type DecisionStatusInput = {
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
+}
+
+export type DecisionStatusOutput = { location: LocationPublicRef; data: DecisionStatus }
+
+export type DecisionUpdateInput = {
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
+  readonly model?: {
+    readonly model?: string | null | undefined
+    readonly uses?: { readonly [x: string]: boolean | null } | undefined
+  }["model"]
+  readonly uses?: {
+    readonly model?: string | null | undefined
+    readonly uses?: { readonly [x: string]: boolean | null } | undefined
+  }["uses"]
+}
+
+export type DecisionUpdateOutput = { location: LocationPublicRef; data: DecisionStatus }
+
+export type DecisionModelsInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined } | undefined
+    readonly provider?: string | undefined
+  }["location"]
+  readonly provider?: {
+    readonly location?: { readonly directory?: string | undefined } | undefined
+    readonly provider?: string | undefined
+  }["provider"]
+}
+
+export type DecisionModelsOutput = { location: LocationPublicRef; data: Array<string> }
 
 export type RpcCallInput = {
   readonly rpcID: { readonly rpcID: string; readonly method: string }["rpcID"]

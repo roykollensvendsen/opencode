@@ -3,6 +3,7 @@ import { RequestExecutor } from "@opencode/ai/route"
 import { Credential } from "@opencode/core/credential"
 import { Decision } from "@opencode/core/decision"
 import { Integration } from "@opencode/core/integration"
+import { KV } from "@opencode/core/kv"
 import { Provider } from "@opencode/core/provider"
 import { Effect, Fiber, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
@@ -47,15 +48,26 @@ interface Seen {
   readonly body: { readonly model: string; readonly questions: Record<string, unknown> }
 }
 
-/** A System One host that answers every noul question with 0.8, or replies with `status`, or never replies. */
-const host = (seen: Seen[], reply: "answer" | "never" | number | { status: number; message: string } = "answer") =>
-  RequestExecutor.layer.pipe(
-    Layer.provide(
-      Layer.succeed(
+/** An in-memory KV store, so stored choices can be read back across service instances. */
+const memory = (store: Map<string, KV.Value>) =>
+  Layer.mock(KV.Service, {
+    get: (key) => Effect.sync(() => store.get(key)),
+    set: (key, value) => Effect.sync(() => void store.set(key, value)),
+    remove: (key) => Effect.sync(() => void store.delete(key)),
+  })
+
+/**
+ * A System One host that answers every noul question with 0.8, or replies with `status`, or never replies. It also
+ * lists two models at `/models`.
+ */
+const host = (seen: Seen[], reply: "answer" | "never" | number | { status: number; message: string } = "answer") => {
+  const client = Layer.succeed(
         HttpClient.HttpClient,
         HttpClient.make((request: HttpClientRequest.HttpClientRequest) =>
           Effect.gen(function* () {
             const web = yield* HttpClientRequest.toWeb(request).pipe(Effect.orDie)
+            if (web.url.endsWith("/models"))
+              return HttpClientResponse.fromWeb(request, Response.json({ data: [{ id: "reax-1" }, { id: "s1-fast" }] }))
             const body = JSON.parse(yield* Effect.promise(() => web.text()))
             seen.push({ url: web.url, authorization: web.headers.get("authorization") ?? undefined, body })
             if (reply === "never") return yield* Effect.never
@@ -73,17 +85,26 @@ const host = (seen: Seen[], reply: "answer" | "never" | number | { status: numbe
             )
           }),
         ),
-      ),
-    ),
-  )
+      )
+  return Layer.merge(client, RequestExecutor.layer.pipe(Layer.provide(client)))
+}
 
 const decision = (
   seen: Seen[],
-  options: { key?: string | undefined; reply?: "answer" | "never" | number | { status: number; message: string } } = {},
+  options: {
+    key?: string | undefined
+    reply?: "answer" | "never" | number | { status: number; message: string }
+    store?: Map<string, KV.Value>
+  } = {},
 ) =>
   Decision.layer.pipe(
     Layer.provide(
-      Layer.mergeAll(integrations("key" in options ? options.key : "dm-test-key"), providers, host(seen, options.reply)),
+      Layer.mergeAll(
+        integrations("key" in options ? options.key : "dm-test-key"),
+        providers,
+        host(seen, options.reply),
+        memory(options.store ?? new Map()),
+      ),
     ),
   )
 
@@ -204,4 +225,31 @@ it.effect("reads a host's context-length error as too large", () =>
     )
     expect(result).toMatchObject({ status: "unavailable", reason: "too-large" })
   }),
+)
+
+it.effect("stores UI choices across restarts, lets null clear one, and records each purpose's last outcome", () =>
+  Effect.gen(function* () {
+    const store = new Map<string, KV.Value>()
+    yield* Effect.gen(function* () {
+      const service = yield* Decision.Service
+      expect(service.controls.current()).toEqual({ uses: {} })
+      yield* service.controls.set({ model: "decisionmodels/s1-fast", uses: { approval: true, guard: false } })
+      yield* service.ask({ model: "decisionmodels/reax-1", purpose: "approval", state: "x", questions: { q: question("?") } })
+      expect(service.last("approval")).toMatchObject({ status: "ok" })
+      expect(service.last("guard")).toBeUndefined()
+    }).pipe(Effect.provide(decision([], { store })))
+    // A new service instance, as after a restart, reads the stored choices back.
+    yield* Effect.gen(function* () {
+      const service = yield* Decision.Service
+      expect(service.controls.current()).toEqual({ model: "decisionmodels/s1-fast", uses: { approval: true, guard: false } })
+      expect(yield* service.controls.set({ model: null, uses: { guard: null } })).toEqual({ uses: { approval: true } })
+    }).pipe(Effect.provide(decision([], { store })))
+  }),
+)
+
+it.effect("lists the models the provider's host serves", () =>
+  Effect.gen(function* () {
+    const service = yield* Decision.Service
+    expect(yield* service.models("decisionmodels")).toEqual(["reax-1", "s1-fast"])
+  }).pipe(Effect.provide(decision([]))),
 )

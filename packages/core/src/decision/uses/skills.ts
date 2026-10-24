@@ -34,6 +34,8 @@ export function filter(text: string, keep: ReadonlySet<string>) {
 
 export const Use = DecisionUse.define({
   id: "skills",
+  title: "Pick skills",
+  description: "Offer only the skills relevant to the request",
   threshold: 0.5,
   setup: (ctx, kit) =>
     ctx.session.hook("context", (event) =>

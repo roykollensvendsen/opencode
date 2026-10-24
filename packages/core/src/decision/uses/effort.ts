@@ -39,6 +39,8 @@ export function pick<V extends string>(variants: ReadonlyArray<V>, base: V | und
 
 export const Use = DecisionUse.define({
   id: "effort",
+  title: "Match effort",
+  description: "Use low reasoning for trivial requests and high for hard ones",
   threshold: 0.35,
   setup: (ctx, kit) =>
     Effect.gen(function* () {

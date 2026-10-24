@@ -27,6 +27,8 @@ export const stops = (willSucceed: number | undefined, threshold: number) =>
 
 export const Use = DecisionUse.define({
   id: "retries",
+  title: "Stop pointless retries",
+  description: "Stop retrying model errors that retrying will not fix",
   threshold: 0.9,
   setup: (ctx, kit) =>
     ctx.session.hook("retry", (event) =>

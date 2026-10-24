@@ -26,6 +26,8 @@ export const routes = (probabilities: Readonly<Record<string, number>> | undefin
 
 export const Use = DecisionUse.define({
   id: "routing",
+  title: "Plan big requests",
+  description: "Start large or unclear first requests in the plan agent",
   threshold: 0.9,
   setup: (ctx, kit) =>
     ctx.session.hook("prompt", (event) =>

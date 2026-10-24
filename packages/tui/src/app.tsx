@@ -65,6 +65,7 @@ import { PermissionProvider } from "./context/permission"
 import { DialogModel } from "./component/dialog-model"
 import { useConnected } from "./component/use-connected"
 import { DialogMcp } from "./component/dialog-mcp"
+import { DialogDecision } from "./component/dialog-decision"
 import { DialogStatus } from "./component/dialog-status"
 import { DialogConfig } from "./component/dialog-config"
 import { DialogDebug } from "./component/dialog-debug"
@@ -957,6 +958,15 @@ function App() {
         slash: { name: "mcps" },
         run: () => {
           dialog.replace(() => <DialogMcp />)
+        },
+      },
+      {
+        name: "decision.list",
+        title: "Decision models",
+        category: "Agent",
+        slash: { name: "decisions" },
+        run: () => {
+          dialog.replace(() => <DialogDecision />)
         },
       },
       {

@@ -2,7 +2,7 @@ export * as DecisionPlugin from "./decision.js"
 
 import type { Message } from "@opencode/ai"
 import { define } from "@opencode/plugin/effect/plugin"
-import { Effect } from "effect"
+import { Effect, Stream } from "effect"
 import { Config } from "../config.js"
 import { ConfigEntryObserver } from "../config/plugin/entry-observer.js"
 import { Decision } from "../decision.js"
@@ -22,6 +22,12 @@ export const Plugin = define({
     // Internal plugins are not re-run on config changes; the tool use reads settings inside its transform.
     const loaded = yield* ConfigEntryObserver.observe(config, ctx.event, ctx.tool.reload())
     const current = () => Config.latest(loaded.entries, "decision")
+    // A choice made in the UI wins over config; clearing it lets config decide again.
+    const model = () => decision.controls.current().model ?? current()?.model
+    yield* decision.controls.changes.pipe(
+      Stream.runForEach(() => ctx.tool.reload()),
+      Effect.forkScoped({ startImmediately: true }),
+    )
 
     yield* ctx.session.hook("context", (event) =>
       Effect.sync(() => {
@@ -36,14 +42,14 @@ export const Plugin = define({
     yield* Effect.forEach(DecisionUses.all, (use) =>
       use.setup(ctx, {
         settings: () => {
-          const settings = current()
-          const configured = settings?.uses?.[use.id]
-          if (!settings?.model || configured?.enabled !== true) return undefined
-          return { threshold: configured.threshold ?? use.threshold, options: configured.options ?? {} }
+          const configured = current()?.uses?.[use.id]
+          const enabled = decision.controls.current().uses[use.id] ?? configured?.enabled === true
+          if (!model() || !enabled) return undefined
+          return { threshold: configured?.threshold ?? use.threshold, options: configured?.options ?? {} }
         },
         ask: (state, questions) =>
           decision.ask({
-            model: current()?.model ?? "",
+            model: model() ?? "",
             purpose: use.id,
             state,
             questions,
