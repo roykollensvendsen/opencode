@@ -13,6 +13,8 @@ import { OutputUse } from "@opencode/core/decision/uses/output"
 import { SearchUse } from "@opencode/core/decision/uses/search"
 import { TodosUse } from "@opencode/core/decision/uses/todos"
 import { ToolsUse } from "@opencode/core/decision/uses/tools"
+import { ScreensUse } from "@opencode/core/decision/uses/screens"
+import { DecisionFiles } from "@opencode/core/decision/files"
 import { DecisionUses } from "@opencode/core/decision/uses"
 
 describe("decision uses", () => {
@@ -162,6 +164,29 @@ describe("third batch of uses", () => {
 
   test("tools drops only unpicked MCP tools, never built-in ones", () => {
     expect(ToolsUse.dropped(["read", "github_list_prs", "slack_post", "shell"], new Set(["github_list_prs", "slack_post"]), new Set(["slack_post"]))).toEqual(["github_list_prs"])
+  })
+})
+
+describe("fourth batch of uses", () => {
+  test("test files are recognised across common layouts", () => {
+    for (const path of ["src/cart.test.ts", "test/cart.js", "pkg/__tests__/a.tsx", "app/spec/user_spec.rb", "svc/handler_test.go", "test_api.py"])
+      expect(DecisionFiles.isTest(path)).toBe(true)
+    for (const path of ["src/cart.ts", "README.md", "src/testing-utils.ts"]) expect(DecisionFiles.isTest(path)).toBe(false)
+    expect(DecisionFiles.top("src/a/b.ts")).toBe("src")
+    expect(DecisionFiles.top("README.md")).toBe(".")
+  })
+
+  test("screens takes image data URLs from tool content and skips anything else", () => {
+    const png = "data:image/png;base64,AAAA"
+    expect(
+      ScreensUse.images([
+        { type: "text", text: "x" },
+        { type: "file", mime: "image/png", uri: png },
+        { type: "file", mime: "image/png", uri: "file:///tmp/a.png" },
+        { type: "file", mime: "application/pdf", uri: "data:application/pdf;base64,AAAA" },
+      ]),
+    ).toEqual([png])
+    expect(ScreensUse.images("no content")).toEqual([])
   })
 })
 

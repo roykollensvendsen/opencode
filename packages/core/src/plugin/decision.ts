@@ -64,9 +64,10 @@ export const Plugin = define({
           if (!model() || !enabled) return undefined
           return { threshold: configured?.threshold ?? use.threshold, options: configured?.options ?? {} }
         },
-        ask: (state, questions) =>
+        ask: (state, questions, options) =>
           decision.ask({
-            model: model() ?? "",
+            model: options?.model ?? model() ?? "",
+            ...(options?.images ? { images: options.images } : {}),
             purpose: use.id,
             state,
             questions,

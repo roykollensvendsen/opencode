@@ -30,8 +30,15 @@ export interface Settings {
 export interface Kit {
   /** This use's settings, read at call time; undefined while the use or the decision model is not configured. */
   readonly settings: () => Settings | undefined
-  /** Asks the configured decision model, recording this use as the purpose. Never fails. */
-  readonly ask: (state: EvaluationInput, questions: EvaluationQuestions) => Effect.Effect<Decision.Result>
+  /**
+   * Asks the configured decision model, recording this use as the purpose. Never fails. `model` overrides the model
+   * for this call (a vision model, say); `images` are data URLs.
+   */
+  readonly ask: (
+    state: EvaluationInput,
+    questions: EvaluationQuestions,
+    options?: { readonly model?: string; readonly images?: ReadonlyArray<string> },
+  ) => Effect.Effect<Decision.Result>
   readonly session: Decision.Interface["session"]
   /** Tokens the decision model accepts per request; trim what you send to fit (see `DecisionText.clip`). */
   readonly limit: () => number

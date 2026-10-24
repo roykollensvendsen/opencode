@@ -2,6 +2,7 @@ import { describe, expect } from "bun:test"
 import type { EvaluationQuestions } from "@opencode/ai/experimental"
 import { Decision } from "@opencode/core/decision"
 import { DecisionBlocks } from "@opencode/core/decision/blocks"
+import { DecisionFiles } from "@opencode/core/decision/files"
 import type { DecisionUse } from "@opencode/core/decision/use"
 import { Effect, Layer } from "effect"
 import { testEffect } from "./lib/effect"
@@ -73,6 +74,36 @@ describe("decision blocks", () => {
       const question = { instructions: "?", criteria: { plan: "p", build: "b" } }
       expect((yield* DecisionBlocks.choose(kit(answer(0.95)), "x", question, 0.9)).choice).toBe("plan")
       expect((yield* DecisionBlocks.choose(kit(answer(0.6)), "x", question, 0.9)).choice).toBeUndefined()
+    }),
+  )
+
+  it.effect("file pick narrows to directories first when there are many files", () =>
+    Effect.gen(function* () {
+      const asked: EvaluationQuestions[] = []
+      // Say yes to anything mentioning "src" (the directory step) and to cart files (the file step).
+      const answer = (questions: EvaluationQuestions) =>
+        Object.fromEntries(
+          Object.entries(questions).map(([id, question]) => [
+            id,
+            { type: "boolean", probability: /\\"src\\"|cart/.test(JSON.stringify(question.instructions)) ? 0.9 : 0.1 },
+          ]),
+        )
+      const files = [
+        ...Array.from({ length: 30 }, (_, i) => `docs/page${i}.md`),
+        ...Array.from({ length: 20 }, (_, i) => `src/module${i}.ts`),
+        "src/cart.ts",
+      ]
+      const picked = yield* DecisionFiles.pick(kit(answer, asked), {
+        request: "fix the cart total",
+        files,
+        question: (path) => ({ instructions: `read ${path}?` }),
+        threshold: 0.5,
+        max: 3,
+      })
+      expect(picked).toEqual(["src/cart.ts"])
+      // Step one asked about the two directories, step two only about files under src.
+      expect(Object.keys(asked[0] ?? {})).toHaveLength(2)
+      expect(Object.values(asked[1] ?? {}).every((question) => JSON.stringify(question.instructions).includes("src/"))).toBe(true)
     }),
   )
 

@@ -26,6 +26,6 @@ export class Info extends Schema.Class<Info>("Config.Decision")({
   }),
   uses: Schema.Record(Schema.String, Use).pipe(optional).annotate({
     description:
-      "Uses of the decision model by ID (approval, screening, skills, decide, claims, retries, effort, guard, routing, stuck, completion, frustration, flaky, questions, output, models, scope, search, history, todos, tools, fallback); each is off unless enabled",
+      "Uses of the decision model by ID (approval, screening, skills, decide, claims, retries, effort, guard, routing, stuck, completion, frustration, flaky, questions, output, models, scope, search, history, todos, tools, fallback, reading, testing, compaction, screens); each is off unless enabled",
   }),
 }) {}

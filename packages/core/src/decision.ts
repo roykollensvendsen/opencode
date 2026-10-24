@@ -40,6 +40,8 @@ export interface AskInput {
   readonly maxQuestions?: number
   /** Tokens the model accepts per request, for the state and its questions together. */
   readonly contextTokens?: number
+  /** Images as data URLs, sent with every request for vision models (System One's top-level `images`). */
+  readonly images?: ReadonlyArray<string>
 }
 
 export type Result =
@@ -140,6 +142,8 @@ const DEFAULT_TIMEOUT_MS = 3_000
 const DEFAULT_MAX_QUESTIONS = 3
 /** Decision Models' System One models take 8,000 to 8,192 tokens (models.dev, 2026-10-24); the smaller is the safe default. */
 export const DEFAULT_CONTEXT_TOKENS = 8_000
+/** Measured on Decision Models' s1-vision-2: about 370-420 tokens per image at 640x420 to 1280x840 (2026-10-24). */
+const IMAGE_TOKENS = 450
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_LIMIT = 500
 const SESSION_LIMIT = 200
@@ -236,7 +240,7 @@ export const layer = Layer.effect(
       const modelID = input.model.slice(slash + 1)
 
       const key = createHash("sha256")
-        .update(canonical({ model: input.model, state: input.state, questions: input.questions }))
+        .update(canonical({ model: input.model, state: input.state, questions: input.questions, images: input.images ?? [] }))
         .digest("hex")
       const hit = cache.get(key)
       if (hit && hit.expires > Date.now()) return { ...hit.result, cached: true, ms: 0 }
@@ -248,7 +252,9 @@ export const layer = Layer.effect(
       )
       // Checked before anything is sent: a request the model cannot take is reported, never silently cut or sent.
       const limit = input.contextTokens ?? DEFAULT_CONTEXT_TOKENS
-      const estimated = Math.max(...parts.map((questions) => estimateTokens(input.state, questions)))
+      // An image costs about 400 tokens however large it is (the host downscales); its base64 length does not count.
+      const estimated =
+        Math.max(...parts.map((questions) => estimateTokens(input.state, questions))) + (input.images?.length ?? 0) * IMAGE_TOKENS
       if (estimated > limit) {
         yield* Effect.logWarning("decision request too large").pipe(
           Effect.annotateLogs({ purpose: input.purpose, model: input.model, estimated, limit }),
@@ -269,7 +275,12 @@ export const layer = Layer.effect(
       const responses = yield* Effect.forEach(
         parts,
         (questions) =>
-          Evaluation.run({ model, state: input.state, questions }).pipe(
+          Evaluation.run({
+            model,
+            state: input.state,
+            questions,
+            ...(input.images?.length ? { http: { body: { images: [...input.images] } } } : {}),
+          }).pipe(
             // A busy or rate-limited host often has room a moment later; the overall timeout still bounds the wait.
             Effect.retry({
               while: (error) => BUSY.test(error.message),

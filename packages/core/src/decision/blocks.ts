@@ -21,8 +21,13 @@ export interface YesNo {
   readonly criteria?: { readonly true: string; readonly false: string }
 }
 
-export const gate = Effect.fnUntraced(function* (kit: DecisionUse.Kit, state: EvaluationInput, question: YesNo) {
-  const result = yield* kit.ask(state, { answer: { type: "boolean", ...question } })
+export const gate = Effect.fnUntraced(function* (
+  kit: DecisionUse.Kit,
+  state: EvaluationInput,
+  question: YesNo,
+  options?: Parameters<DecisionUse.Kit["ask"]>[2],
+) {
+  const result = yield* kit.ask(state, { answer: { type: "boolean", ...question } }, options)
   return { p: Decision.probability(result, "answer"), result }
 })
 

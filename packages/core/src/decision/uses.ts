@@ -2,6 +2,7 @@ export * as DecisionUses from "./uses.js"
 
 import { ApprovalUse } from "./uses/approval.js"
 import { ClaimsUse } from "./uses/claims.js"
+import { CompactionUse } from "./uses/compaction.js"
 import { CompletionUse } from "./uses/completion.js"
 import { DecideUse } from "./uses/decide.js"
 import { EffortUse } from "./uses/effort.js"
@@ -13,13 +14,16 @@ import { HistoryUse } from "./uses/history.js"
 import { ModelsUse } from "./uses/models.js"
 import { OutputUse } from "./uses/output.js"
 import { QuestionsUse } from "./uses/questions.js"
+import { ReadingUse } from "./uses/reading.js"
 import { RetriesUse } from "./uses/retries.js"
 import { RoutingUse } from "./uses/routing.js"
 import { ScopeUse } from "./uses/scope.js"
 import { ScreeningUse } from "./uses/screening.js"
+import { ScreensUse } from "./uses/screens.js"
 import { SearchUse } from "./uses/search.js"
 import { SkillsUse } from "./uses/skills.js"
 import { StuckUse } from "./uses/stuck.js"
+import { TestingUse } from "./uses/testing.js"
 import { TodosUse } from "./uses/todos.js"
 import { ToolsUse } from "./uses/tools.js"
 
@@ -47,4 +51,8 @@ export const all = [
   TodosUse.Use,
   ToolsUse.Use,
   FallbackUse.Use,
+  ReadingUse.Use,
+  TestingUse.Use,
+  CompactionUse.Use,
+  ScreensUse.Use,
 ] as const
