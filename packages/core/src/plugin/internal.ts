@@ -17,6 +17,8 @@ import { llmClient } from "../effect/app-node-platform.js"
 import { ConfigAgentPlugin } from "../config/plugin/agent.js"
 import { ConfigCommandPlugin } from "../config/plugin/command.js"
 import { ConfigCompactionPlugin } from "../config/plugin/compaction.js"
+import { Decision } from "../decision.js"
+import { DecisionPlugin } from "./decision.js"
 import { ConfigFormatterPlugin } from "../config/plugin/formatter.js"
 import { ConfigImagePlugin } from "../config/plugin/image.js"
 import { ConfigInstructionPlugin } from "../config/plugin/instruction.js"
@@ -108,6 +110,7 @@ import { WellKnownPlugin } from "../wellknown/plugin.js"
 
 const services = [
   Agent.Service,
+  Decision.Service,
   AppProcess.Service,
   Provider.Service,
   Model.Service,
@@ -162,6 +165,7 @@ export type Requirements = Context.Service.Identifier<(typeof services)[number]>
 
 export const requirements = LayerNode.group([
   Agent.node,
+  Decision.node,
   AppProcess.node,
   Provider.node,
   Model.node,
@@ -258,6 +262,7 @@ const post = [
   BrowserPlugin,
   ConfigCommandPlugin.Plugin,
   ConfigCompactionPlugin.Plugin,
+  DecisionPlugin.Plugin,
   ConfigFormatterPlugin.Plugin,
   ConfigImagePlugin.Plugin,
   ConfigLocationWatcherPlugin.Plugin,

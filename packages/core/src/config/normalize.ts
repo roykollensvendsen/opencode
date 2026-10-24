@@ -214,6 +214,7 @@ export function normalize(input: unknown): Result {
     media: Info.fields.media,
     tool_output: Info.fields.tool_output,
     websearch: Info.fields.websearch,
+    decision: Info.fields.decision,
     worktree: Info.fields.worktree,
     warming: Info.fields.warming,
   }
