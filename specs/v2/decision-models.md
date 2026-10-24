@@ -51,6 +51,25 @@ These are labelled sets with baselines, run on reax-1 (prototype repo commits d8
 | Delegate | 5/5 | keywords 4/5 | little gain |
 | Suggest always-allow | 6/6 | allowlist 5/6 | no gain |
 
+Third round (prototype repo commit ed8c94a; hard cases in brackets):
+
+- **Worth building:**
+  - lsp-diag (7/7, same-file rule 1/7)
+  - output-lines (9/10, keep-the-tail 2/10)
+  - test-select (13/13 found; pick a subset, never skip)
+  - read-first (11/14, rank by p)
+  - search-hits (35/36, word overlap 19/36)
+  - todo-done (6/6, 4/6)
+  - flaky (6/6, 3/6)
+  - same-task (7/7, 0/7)
+  - frustration (8/8, 4/8)
+  - fallback-model (6/6, 3/6)
+  - screenshot error and expected state (7/7 each with `s1-vision-2`, about 400 tokens per image; needs image input in `Decision.ask`, and downscaling below 2 MP)
+- **Little gain:** risk badge, worktree, revert, subagent-check, commit-type.
+- **Too easy to judge:** steer-queue, conflict.
+
+Many of these are "select relevant items from a list", which points to one shared building block (see Open).
+
 Four safety candidates were not tested: data leaving the machine, poisoned MCP tool descriptions, instruction-file scanning and suspicious packages. Writing realistic attack cases was stopped by a safety filter. They need cases written by the user or a public benchmark.
 
 ## Rejected along the way
@@ -75,5 +94,9 @@ Four safety candidates were not tested: data leaving the machine, poisoned MCP t
 - There is no API for external plugins (`ctx.decision.ask`) and no `opencode decide` command.
 - Several parallel callers on one key hit HTTP 429. The service may need a per-host concurrency limit.
 - Requests over the model's context are now reported as `too-large` before sending, with `decision.context` defaulting to 8,000. The estimate is 3.5 characters per token, and it is not calibrated against the host's tokenizer.
+
+- Shared building blocks. The about 40 candidates reduce to four question forms: gate (one boolean), select (one boolean per item, threshold or top-k, with a cap), choose (choice) and rate (score). They use a small set of triggers (prompt, before and after a tool, permission, context, idle, retry, compaction) and actions (allow, annotate, reject, filter context, switch model or agent, synthetic note or resume, notify, badge). Shared state builders would cover the request, the last command, recent tool calls, the diff per file and flags. The uses should be rewritten on these blocks.
+- Controls: today the uses are switched on and off only in `opencode.jsonc`. Planned: a `/decision` command (status, on/off per use, choosing the model, overrides stored in KV) and later a settings dialog and a separate picker for decision models.
+- Image input for vision decision models.
 
 Full evidence, with the commands to repeat every number, is in the prototype repo's `VALIDATION.md`.
