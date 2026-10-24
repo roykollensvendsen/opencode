@@ -10,6 +10,9 @@ import { SkillsUse } from "@opencode/core/decision/uses/skills"
 import { StuckUse } from "@opencode/core/decision/uses/stuck"
 import { FlakyUse } from "@opencode/core/decision/uses/flaky"
 import { OutputUse } from "@opencode/core/decision/uses/output"
+import { SearchUse } from "@opencode/core/decision/uses/search"
+import { TodosUse } from "@opencode/core/decision/uses/todos"
+import { ToolsUse } from "@opencode/core/decision/uses/tools"
 import { DecisionUses } from "@opencode/core/decision/uses"
 
 describe("decision uses", () => {
@@ -124,6 +127,41 @@ describe("second batch of uses", () => {
     expect(joined).toContain("line 0")
     expect(joined).toContain("line 10")
     expect(joined).not.toContain("line 4")
+  })
+})
+
+describe("third batch of uses", () => {
+  test("search reads results from the websearch output", () => {
+    const found = SearchUse.results({
+      provider: "x",
+      results: [
+        { url: "https://a.example", title: "A", content: "about a" },
+        { url: "https://b.example", time: {} },
+        { title: "no url" },
+      ],
+    })
+    expect(found).toEqual([
+      { index: 0, url: "https://a.example", title: "A", snippet: "about a" },
+      { index: 1, url: "https://b.example", title: "https://b.example", snippet: "" },
+    ])
+    expect(SearchUse.results("nope")).toEqual([])
+  })
+
+  test("todos takes only in-progress items from a todowrite input", () => {
+    expect(
+      TodosUse.inProgress({
+        todos: [
+          { content: "fix cart", status: "in_progress" },
+          { content: "write docs", status: "pending" },
+          { content: "run tests", status: "in_progress" },
+        ],
+      }),
+    ).toEqual([{ content: "fix cart" }, { content: "run tests" }])
+    expect(TodosUse.inProgress({})).toEqual([])
+  })
+
+  test("tools drops only unpicked MCP tools, never built-in ones", () => {
+    expect(ToolsUse.dropped(["read", "github_list_prs", "slack_post", "shell"], new Set(["github_list_prs", "slack_post"]), new Set(["slack_post"]))).toEqual(["github_list_prs"])
   })
 })
 
