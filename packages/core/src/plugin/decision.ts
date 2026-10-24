@@ -49,8 +49,10 @@ export const Plugin = define({
             questions,
             timeout: current()?.timeout,
             maxQuestions: current()?.max_questions,
+            contextTokens: current()?.context,
           }),
         session: decision.session,
+        limit: () => current()?.context ?? Decision.DEFAULT_CONTEXT_TOKENS,
         log: (fields) => Effect.logInfo("decision").pipe(Effect.annotateLogs({ purpose: use.id, ...fields })),
       }),
     )

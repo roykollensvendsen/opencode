@@ -34,7 +34,11 @@ export const Use = DecisionUse.define({
         const text = DecisionText.resultText(event.result)
         if (text.trim().length === 0) return
         const result = yield* kit.ask(
-          { tool: event.tool, input: DecisionText.toJson(event.input) ?? null, output: text.slice(0, 12_000) },
+          {
+            tool: event.tool,
+            input: DecisionText.toJson(event.input) ?? null,
+            output: DecisionText.clip(text, DecisionText.budget(kit.limit(), 0.7)),
+          },
           { injected: QUESTION },
         )
         const p = Decision.probability(result, "injected")

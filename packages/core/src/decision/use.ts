@@ -29,6 +29,8 @@ export interface Kit {
   /** Asks the configured decision model, recording this use as the purpose. Never fails. */
   readonly ask: (state: EvaluationInput, questions: EvaluationQuestions) => Effect.Effect<Decision.Result>
   readonly session: Decision.Interface["session"]
+  /** Tokens the decision model accepts per request; trim what you send to fit (see `DecisionText.clip`). */
+  readonly limit: () => number
   readonly log: (fields: Record<string, unknown>) => Effect.Effect<void>
 }
 

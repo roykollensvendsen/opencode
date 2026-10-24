@@ -34,6 +34,8 @@ export interface AskInput {
   readonly timeout?: number
   /** Questions the model accepts per request; larger sets are split and sent in parallel. */
   readonly maxQuestions?: number
+  /** Tokens the model accepts per request, for the state and its questions together. */
+  readonly contextTokens?: number
 }
 
 export type Result =
@@ -53,8 +55,10 @@ export type Result =
       readonly status: "unavailable"
       readonly purpose: string
       readonly model: string
-      readonly reason: "not-configured" | "no-credential" | "deadline" | "error"
+      readonly reason: "not-configured" | "no-credential" | "too-large" | "deadline" | "error"
       readonly message?: string
+      /** For `too-large`: the estimated size of the largest request and the limit it exceeded. */
+      readonly tokens?: { readonly estimated: number; readonly limit: number }
       readonly ms: number
     }
 
@@ -93,6 +97,8 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/De
 
 const DEFAULT_TIMEOUT_MS = 3_000
 const DEFAULT_MAX_QUESTIONS = 3
+/** Decision Models' System One models take 8,000 to 8,192 tokens (models.dev, 2026-10-24); the smaller is the safe default. */
+export const DEFAULT_CONTEXT_TOKENS = 8_000
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_LIMIT = 500
 const SESSION_LIMIT = 200
@@ -143,15 +149,31 @@ export const layer = Layer.effect(
       const hit = cache.get(key)
       if (hit && hit.expires > Date.now()) return { ...hit.result, cached: true, ms: 0 }
 
-      const { apiKey, baseURL, headers } = yield* access(providerID)
-      if (!apiKey) return { ...base, status: "unavailable", reason: "no-credential", ms: elapsed() } satisfies Result
-      const model = TypeSafeAI.configure({ apiKey, baseURL, headers }).experimental.evaluation(modelID)
-
       const size = Math.max(1, input.maxQuestions ?? DEFAULT_MAX_QUESTIONS)
       const entries = Object.entries(input.questions)
       const parts = Array.from({ length: Math.ceil(entries.length / size) }, (_, i) =>
         Object.fromEntries(entries.slice(i * size, (i + 1) * size)),
       )
+      // Checked before anything is sent: a request the model cannot take is reported, never silently cut or sent.
+      const limit = input.contextTokens ?? DEFAULT_CONTEXT_TOKENS
+      const estimated = Math.max(...parts.map((questions) => estimateTokens(input.state, questions)))
+      if (estimated > limit) {
+        yield* Effect.logWarning("decision request too large").pipe(
+          Effect.annotateLogs({ purpose: input.purpose, model: input.model, estimated, limit }),
+        )
+        return {
+          ...base,
+          status: "unavailable",
+          reason: "too-large",
+          message: `about ${estimated} tokens, over the model's ${limit}`,
+          tokens: { estimated, limit },
+          ms: elapsed(),
+        } satisfies Result
+      }
+
+      const { apiKey, baseURL, headers } = yield* access(providerID)
+      if (!apiKey) return { ...base, status: "unavailable", reason: "no-credential", ms: elapsed() } satisfies Result
+      const model = TypeSafeAI.configure({ apiKey, baseURL, headers }).experimental.evaluation(modelID)
       const responses = yield* Effect.forEach(
         parts,
         (questions) => Evaluation.run({ model, state: input.state, questions }),
@@ -173,7 +195,7 @@ export const layer = Layer.effect(
         return {
           ...base,
           status: "unavailable",
-          reason: responses.deadline ? "deadline" : "error",
+          reason: responses.deadline ? "deadline" : TOO_LARGE.test(responses.message) ? "too-large" : "error",
           message: responses.message,
           ms: elapsed(),
         } satisfies Result
@@ -203,6 +225,16 @@ export const node = makeLocationNode({
   layer,
   deps: [Integration.node, Provider.node, requestExecutor],
 })
+
+/**
+ * A conservative token estimate for one request: its JSON size at 3.5 characters a token, which overcounts English and
+ * code slightly, plus room for the request envelope.
+ */
+export const estimateTokens = (state: EvaluationInput, questions: Readonly<Record<string, EvaluationQuestion>>) =>
+  Math.ceil(JSON.stringify({ state, questions }).length / 3.5) + 50
+
+/** How hosts word a request over the model's context, so an estimate that was too low is still reported as such. */
+const TOO_LARGE = /context (length|window)|too (long|large)|max(imum)?[ _-]?(input|context)|token limit|exceeds .*tokens/i
 
 /** Probability of a boolean answer, or undefined when the answer is missing or of another type. */
 export const probability = (result: Result, id: string) => {

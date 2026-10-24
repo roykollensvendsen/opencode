@@ -57,12 +57,23 @@ export const Use = DecisionUse.define({
           const settings = kit.settings()
           if (!settings || !judged(event.tool, event.input)) return
           const state = kit.session(event.sessionID)
+          // A large write would not fit the decision model; keep the start and end of each text field instead.
+          const room = DecisionText.budget(kit.limit(), 0.15)
+          const input = DecisionText.toJson(event.input)
+          const clipped =
+            input !== null && input !== undefined && typeof input === "object" && !Array.isArray(input)
+              ? Object.fromEntries(
+                  Object.entries(input).map(([key, value]) => [key, typeof value === "string" ? DecisionText.clip(value, room) : value]),
+                )
+              : (input ?? null)
           const result = yield* kit.ask(
             {
-              user_request: state.userRequest ?? "(unknown)",
+              user_request: DecisionText.clip(state.userRequest ?? "(unknown)", room),
               tool: event.tool,
-              input: DecisionText.toJson(event.input) ?? null,
-              last_command: state.lastCommand ?? null,
+              input: clipped,
+              last_command: state.lastCommand
+                ? { command: state.lastCommand.command, output: DecisionText.clip(state.lastCommand.output, room) }
+                : null,
             },
             { weakens: QUESTION },
           )

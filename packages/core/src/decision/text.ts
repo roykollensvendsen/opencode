@@ -31,6 +31,20 @@ export function prepend<R extends { readonly content?: unknown }>(result: R, not
   return { ...result, content: note }
 }
 
+/**
+ * Shortens text to `max` characters, keeping its start and end, which carry most of the meaning in code, diffs and
+ * logs, with a marker saying how much was left out.
+ */
+export function clip(text: string, max: number) {
+  if (text.length <= max) return text
+  const keep = Math.max(0, max - 40)
+  const head = Math.ceil(keep * 0.6)
+  return `${text.slice(0, head)}\n[… ${text.length - keep} characters left out …]\n${text.slice(text.length - (keep - head))}`
+}
+
+/** Characters of free text that fit in `share` of a model's token limit, at the estimate's 3.5 characters a token. */
+export const budget = (limit: number, share: number) => Math.floor(limit * share * 3.5)
+
 /** Path, URL or command a tool call worked on, for naming where a result came from. */
 export function sourceOf(tool: string, input: unknown) {
   const record = toJson(input)

@@ -21,6 +21,9 @@ export class Info extends Schema.Class<Info>("Config.Decision")({
   }),
   timeout: NonNegativeInt.pipe(optional).annotate({ description: "Milliseconds before a decision counts as unavailable" }),
   max_questions: NonNegativeInt.pipe(optional).annotate({ description: "Questions the model accepts per request" }),
+  context: NonNegativeInt.pipe(optional).annotate({
+    description: "Tokens the model accepts per request; larger questions are reported as too large, not sent",
+  }),
   uses: Schema.Record(Schema.String, Use).pipe(optional).annotate({
     description:
       "Uses of the decision model by ID (approve, screen, skills, tool, claims, retry, effort, guard, route); each is off unless enabled",

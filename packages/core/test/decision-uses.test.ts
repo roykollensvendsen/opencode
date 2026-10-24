@@ -105,6 +105,18 @@ describe("decision text helpers", () => {
     expect(DecisionText.prepend(empty, "note").content).toBe("note")
   })
 
+  test("clip keeps the start and end of long text and says how much it left out", () => {
+    expect(DecisionText.clip("short", 100)).toBe("short")
+    const text = `${"a".repeat(500)}MIDDLE${"z".repeat(500)}`
+    const clipped = DecisionText.clip(text, 200)
+    expect(clipped.length).toBeLessThanOrEqual(240)
+    expect(clipped.startsWith("aaa")).toBe(true)
+    expect(clipped.endsWith("zzz")).toBe(true)
+    expect(clipped).not.toContain("MIDDLE")
+    expect(clipped).toContain("characters left out")
+    expect(DecisionText.budget(8_000, 0.5)).toBe(14_000)
+  })
+
   test("resultText and sourceOf read the usual tool shapes", () => {
     expect(DecisionText.resultText({ content: [{ type: "text", text: "a" }, { type: "file" }, { type: "text", text: "b" }] })).toBe("a\nb")
     expect(DecisionText.resultText({ output: { ok: true } })).toBe('{"ok":true}')

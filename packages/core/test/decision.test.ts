@@ -48,7 +48,7 @@ interface Seen {
 }
 
 /** A System One host that answers every noul question with 0.8, or replies with `status`, or never replies. */
-const host = (seen: Seen[], reply: "answer" | "never" | number = "answer") =>
+const host = (seen: Seen[], reply: "answer" | "never" | number | { status: number; message: string } = "answer") =>
   RequestExecutor.layer.pipe(
     Layer.provide(
       Layer.succeed(
@@ -61,6 +61,8 @@ const host = (seen: Seen[], reply: "answer" | "never" | number = "answer") =>
             if (reply === "never") return yield* Effect.never
             if (typeof reply === "number")
               return HttpClientResponse.fromWeb(request, Response.json({ error: { message: "boom" } }, { status: reply }))
+            if (typeof reply === "object")
+              return HttpClientResponse.fromWeb(request, Response.json({ error: { message: reply.message } }, { status: reply.status }))
             return HttpClientResponse.fromWeb(
               request,
               Response.json({
@@ -75,7 +77,10 @@ const host = (seen: Seen[], reply: "answer" | "never" | number = "answer") =>
     ),
   )
 
-const decision = (seen: Seen[], options: { key?: string | undefined; reply?: "answer" | "never" | number } = {}) =>
+const decision = (
+  seen: Seen[],
+  options: { key?: string | undefined; reply?: "answer" | "never" | number | { status: number; message: string } } = {},
+) =>
   Decision.layer.pipe(
     Layer.provide(
       Layer.mergeAll(integrations("key" in options ? options.key : "dm-test-key"), providers, host(seen, options.reply)),
@@ -163,4 +168,40 @@ it.effect("keeps one shared state object per Session", () =>
     expect(service.session("ses_a")).toBe(state)
     expect(service.session("ses_b")).toEqual({ flags: [], claimNotes: 0 })
   }).pipe(Effect.provide(decision([]))),
+)
+
+it.effect("reports a request over the model's context as too large without sending it", () =>
+  Effect.gen(function* () {
+    const seen: Seen[] = []
+    const ask = (contextTokens: number | undefined) =>
+      Effect.flatMap(Decision.Service, (service) =>
+        service.ask({
+          model: "decisionmodels/reax-1",
+          purpose: "test",
+          state: "x".repeat(40_000),
+          questions: { q: question("?") },
+          contextTokens,
+        }),
+      ).pipe(Effect.provide(decision(seen)))
+    const result = yield* ask(undefined)
+    expect(result).toMatchObject({ status: "unavailable", reason: "too-large", tokens: { limit: Decision.DEFAULT_CONTEXT_TOKENS } })
+    expect(result.status === "unavailable" && (result.tokens?.estimated ?? 0) > Decision.DEFAULT_CONTEXT_TOKENS).toBe(true)
+    expect(seen).toHaveLength(0)
+    // A larger configured context lets the same request through.
+    expect(yield* ask(32_000)).toMatchObject({ status: "ok" })
+    expect(seen).toHaveLength(1)
+  }),
+)
+
+it.effect("reads a host's context-length error as too large", () =>
+  Effect.gen(function* () {
+    const result = yield* Effect.flatMap(Decision.Service, (service) =>
+      service.ask({ model: "decisionmodels/reax-1", purpose: "test", state: "x", questions: { q: question("?") } }),
+    ).pipe(
+      Effect.provide(
+        decision([], { reply: { status: 400, message: "Input of 9,120 tokens exceeds the model's context length of 8,000" } }),
+      ),
+    )
+    expect(result).toMatchObject({ status: "unavailable", reason: "too-large" })
+  }),
 )
