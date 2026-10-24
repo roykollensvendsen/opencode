@@ -57,8 +57,29 @@ export type Result =
       readonly ms: number
     }
 
+/** A tool result one use of the decision model flagged as trying to instruct the agent. */
+export interface Flag {
+  readonly tool: string
+  /** Path, URL or command the flagged text came from. */
+  readonly source: string
+  readonly excerpt: string
+  readonly probability: number
+}
+
+/**
+ * What the uses of the decision model know about one Session, shared so that one use can act on what another found:
+ * the user's latest request, tool results flagged as instructing the agent, and the skills picked for the request.
+ */
+export interface SessionState {
+  userRequest?: string
+  readonly flags: Flag[]
+  skills?: ReadonlySet<string> | "all"
+}
+
 export interface Interface {
   readonly ask: (input: AskInput) => Effect.Effect<Result>
+  /** Shared, in-memory state for one Session; created on first use. */
+  readonly session: (sessionID: string) => SessionState
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Decision") {}
@@ -67,6 +88,7 @@ const DEFAULT_TIMEOUT_MS = 3_000
 const DEFAULT_MAX_QUESTIONS = 3
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_LIMIT = 500
+const SESSION_LIMIT = 200
 
 export const layer = Layer.effect(
   Service,
@@ -75,6 +97,15 @@ export const layer = Layer.effect(
     const integrations = yield* Integration.Service
     const providers = yield* Provider.Service
     const cache = new Map<string, { readonly expires: number; readonly result: Result }>()
+    const sessions = new Map<string, SessionState>()
+    const session = (sessionID: string) => {
+      const found = sessions.get(sessionID)
+      if (found) return found
+      if (sessions.size >= SESSION_LIMIT) sessions.delete(sessions.keys().next().value!)
+      const created: SessionState = { flags: [] }
+      sessions.set(sessionID, created)
+      return created
+    }
 
     const access = Effect.fnUntraced(function* (providerID: string) {
       const provider = yield* providers.get(Provider.ID.make(providerID))
@@ -154,7 +185,7 @@ export const layer = Layer.effect(
       return result
     })
 
-    return Service.of({ ask })
+    return Service.of({ ask, session })
   }),
 )
 
