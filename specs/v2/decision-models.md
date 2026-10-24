@@ -74,7 +74,7 @@ Four safety candidates were not tested: data leaving the machine, poisoned MCP t
 
 ## Built after the candidate rounds
 
-There are now 26 uses, each a module under `decision/uses/`:
+There are now 28 uses, each a module under `decision/uses/`:
 - approval
 - screening
 - skills
@@ -101,6 +101,8 @@ There are now 26 uses, each a module under `decision/uses/`:
 - testing
 - compaction
 - screens
+- topics
+- commits
 
 They are built from four shared blocks (gate, select, choose, rate), shared actions (note, annotate, reject) and a shared turn summary. Every use is off unless enabled, and is switched in `/decisions` or `decision.uses.<id>`. Live results and what is not yet verified are in the prototype repo's `VALIDATION.md`.
 
