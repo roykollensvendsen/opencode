@@ -12,7 +12,7 @@ const it = testEffect(Layer.empty)
 const kit = (answer: ((questions: EvaluationQuestions) => Record<string, unknown>) | undefined, asked: EvaluationQuestions[] = []) => {
   const value: DecisionUse.Kit = {
     settings: () => ({ threshold: 0.5, options: {} }),
-    session: () => ({ flags: [], claimNotes: 0 }),
+    session: () => ({ flags: [], claimNotes: 0, recentCalls: [], noted: new Set() }),
     limit: () => Decision.DEFAULT_CONTEXT_TOKENS,
     log: () => Effect.void,
     ask: (_state, questions) =>

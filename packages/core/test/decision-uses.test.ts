@@ -7,6 +7,9 @@ import { GuardUse } from "@opencode/core/decision/uses/guard"
 import { RetriesUse } from "@opencode/core/decision/uses/retries"
 import { RoutingUse } from "@opencode/core/decision/uses/routing"
 import { SkillsUse } from "@opencode/core/decision/uses/skills"
+import { StuckUse } from "@opencode/core/decision/uses/stuck"
+import { FlakyUse } from "@opencode/core/decision/uses/flaky"
+import { OutputUse } from "@opencode/core/decision/uses/output"
 import { DecisionUses } from "@opencode/core/decision/uses"
 
 describe("decision uses", () => {
@@ -91,6 +94,36 @@ describe("decision uses", () => {
     expect(kept).toContain("<id>db-migrations</id>")
     expect(kept).not.toContain("<id>pdf</id>")
     expect(SkillsUse.filter("no skills here", new Set())).toBe("no skills here")
+  })
+})
+
+describe("second batch of uses", () => {
+  const call = (name: string, target: string) => ({ name, target, status: "completed" as const, output: "" })
+
+  test("stuck only asks when recent calls repeat the same target", () => {
+    expect(StuckUse.repeats([call("shell", "npm test"), call("edit", "a.ts"), call("shell", "npm test"), call("shell", "npm test")])).toBe(true)
+    expect(StuckUse.repeats([call("read", "a.ts"), call("read", "b.ts"), call("edit", "a.ts"), call("shell", "npm test")])).toBe(false)
+    expect(StuckUse.repeats([call("shell", "npm test"), call("shell", "npm test")])).toBe(false)
+  })
+
+  test("flaky only judges failed test runs", () => {
+    expect(FlakyUse.isFailedTestRun("npm test", 1)).toBe(true)
+    expect(FlakyUse.isFailedTestRun("bun test src/a.test.ts", 1)).toBe(true)
+    expect(FlakyUse.isFailedTestRun("npm test", 0)).toBe(false)
+    expect(FlakyUse.isFailedTestRun("npm run build", 1)).toBe(false)
+    expect(FlakyUse.isFailedTestRun("npm test", undefined)).toBe(false)
+  })
+
+  test("output splits on lines and joins kept chunks with one marker per gap", () => {
+    const text = Array.from({ length: 16 }, (_, i) => `line ${i}`).join("\n")
+    const chunks = OutputUse.split(text, 8)
+    expect(chunks).toHaveLength(8)
+    expect(chunks.join("\n")).toBe(text)
+    const joined = OutputUse.join(chunks, new Set([0, 5]))
+    expect(joined.split("left out").length - 1).toBe(2)
+    expect(joined).toContain("line 0")
+    expect(joined).toContain("line 10")
+    expect(joined).not.toContain("line 4")
   })
 })
 

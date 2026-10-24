@@ -60,4 +60,6 @@ export function sourceOf(tool: string, input: unknown) {
 
 /** The fields worth logging about a result: why it was unavailable, or which model version answered. */
 export const outcome = (result: Decision.Result) =>
-  result.status === "unavailable" ? { reason: result.reason } : { version: result.version }
+  result.status === "unavailable"
+    ? { reason: result.reason, ...(result.message ? { message: result.message.slice(0, 200) } : {}) }
+    : { version: result.version }

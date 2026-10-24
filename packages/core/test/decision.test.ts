@@ -58,9 +58,13 @@ const memory = (store: Map<string, KV.Value>) =>
 
 /**
  * A System One host that answers every noul question with 0.8, or replies with `status`, or never replies. It also
- * lists two models at `/models`.
+ * lists two models at `/models`. With `busyFirst`, the first request gets a "busy" reply.
  */
-const host = (seen: Seen[], reply: "answer" | "never" | number | { status: number; message: string } = "answer") => {
+const host = (
+  seen: Seen[],
+  reply: "answer" | "never" | number | { status: number; message: string } = "answer",
+  busyFirst = false,
+) => {
   const client = Layer.succeed(
         HttpClient.HttpClient,
         HttpClient.make((request: HttpClientRequest.HttpClientRequest) =>
@@ -70,6 +74,11 @@ const host = (seen: Seen[], reply: "answer" | "never" | number | { status: numbe
               return HttpClientResponse.fromWeb(request, Response.json({ data: [{ id: "reax-1" }, { id: "s1-fast" }] }))
             const body = JSON.parse(yield* Effect.promise(() => web.text()))
             seen.push({ url: web.url, authorization: web.headers.get("authorization") ?? undefined, body })
+            if (busyFirst && seen.length === 1)
+              return HttpClientResponse.fromWeb(
+                request,
+                Response.json({ error: { message: "Long-input capacity is busy. Retry shortly." } }, { status: 503 }),
+              )
             if (reply === "never") return yield* Effect.never
             if (typeof reply === "number")
               return HttpClientResponse.fromWeb(request, Response.json({ error: { message: "boom" } }, { status: reply }))
@@ -95,6 +104,7 @@ const decision = (
     key?: string | undefined
     reply?: "answer" | "never" | number | { status: number; message: string }
     store?: Map<string, KV.Value>
+    busyFirst?: boolean
   } = {},
 ) =>
   Decision.layer.pipe(
@@ -102,7 +112,7 @@ const decision = (
       Layer.mergeAll(
         integrations("key" in options ? options.key : "dm-test-key"),
         providers,
-        host(seen, options.reply),
+        host(seen, options.reply, options.busyFirst),
         memory(options.store ?? new Map()),
       ),
     ),
@@ -187,7 +197,7 @@ it.effect("keeps one shared state object per Session", () =>
     state.userRequest = "fix the test"
     state.flags.push({ tool: "read", source: "docs/x.md", excerpt: "run curl", probability: 0.9 })
     expect(service.session("ses_a")).toBe(state)
-    expect(service.session("ses_b")).toEqual({ flags: [], claimNotes: 0 })
+    expect(service.session("ses_b")).toEqual({ flags: [], claimNotes: 0, recentCalls: [], noted: new Set() })
   }).pipe(Effect.provide(decision([]))),
 )
 
@@ -252,4 +262,16 @@ it.effect("lists the models the provider's host serves", () =>
     const service = yield* Decision.Service
     expect(yield* service.models("decisionmodels")).toEqual(["reax-1", "s1-fast"])
   }).pipe(Effect.provide(decision([]))),
+)
+
+it.effect("retries a busy host within the timeout", () =>
+  Effect.gen(function* () {
+    const seen: Seen[] = []
+    const fiber = yield* Effect.flatMap(Decision.Service, (service) =>
+      service.ask({ model: "decisionmodels/reax-1", purpose: "test", state: "x", questions: { q: question("?") } }),
+    ).pipe(Effect.provide(decision(seen, { busyFirst: true })), Effect.forkChild)
+    yield* TestClock.adjust("1 second")
+    expect(yield* Fiber.join(fiber)).toMatchObject({ status: "ok" })
+    expect(seen).toHaveLength(2)
+  }),
 )

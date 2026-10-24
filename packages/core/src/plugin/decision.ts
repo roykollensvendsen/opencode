@@ -6,6 +6,7 @@ import { Effect, Stream } from "effect"
 import { Config } from "../config.js"
 import { ConfigEntryObserver } from "../config/plugin/entry-observer.js"
 import { Decision } from "../decision.js"
+import { DecisionText } from "../decision/text.js"
 import { DecisionUses } from "../decision/uses.js"
 import type { PluginInternal } from "./internal.js"
 
@@ -36,6 +37,22 @@ export const Plugin = define({
         if (!request || request === state.userRequest) return
         state.userRequest = request
         state.claimNotes = 0
+        state.noted.clear()
+        state.frustrated = undefined
+      }),
+    )
+
+    // Recent tool calls are a shared fact several uses judge, so the loader keeps them, not each use.
+    yield* ctx.tool.hook("execute.after", (event) =>
+      Effect.sync(() => {
+        const calls = decision.session(event.sessionID).recentCalls
+        calls.push({
+          name: event.tool,
+          target: DecisionText.sourceOf(event.tool, event.input),
+          status: event.status === "completed" ? "completed" : "error",
+          output: (event.status === "completed" ? DecisionText.resultText(event.result) : event.error.message).slice(-600),
+        })
+        if (calls.length > 8) calls.splice(0, calls.length - 8)
       }),
     )
 

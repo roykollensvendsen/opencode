@@ -11,13 +11,14 @@ import { TypeSafeAI } from "@opencode/ai/providers/typesafe-ai"
 import { RequestExecutor } from "@opencode/ai/route"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { httpClient } from "@opencode/util/effect/app-node-platform"
-import { Context, Duration, Effect, Layer, Option, PubSub, Schema, Stream } from "effect"
+import { Context, Duration, Effect, Layer, Option, PubSub, Schedule, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { createHash } from "node:crypto"
 import { Credential } from "./credential.js"
 import { requestExecutor } from "./effect/app-node-platform.js"
 import { Integration } from "./integration.js"
 import { KV } from "./kv.js"
+import type { DecisionTurn } from "./decision/turn.js"
 import type { Model } from "./model.js"
 import { Provider } from "./provider.js"
 
@@ -88,6 +89,12 @@ export interface SessionState {
   lastCommand?: { readonly command: string; readonly output: string }
   /** The model the Session used before a use changed its variant, so it can be restored. */
   baseModel?: Model.Ref
+  /** The last tool calls, oldest first, kept by the loader for uses that judge recent activity. */
+  readonly recentCalls: DecisionTurn.ToolCall[]
+  /** Notes already given for the current request, by use, so none repeats; cleared on a new request. */
+  readonly noted: Set<string>
+  /** Set by frustration for the current request. */
+  frustrated?: boolean
 }
 
 /**
@@ -157,7 +164,7 @@ export const layer = Layer.effect(
       if (found) return found
       const oldest = sessions.keys().next()
       if (sessions.size >= SESSION_LIMIT && !oldest.done) sessions.delete(oldest.value)
-      const created: SessionState = { flags: [], claimNotes: 0 }
+      const created: SessionState = { flags: [], claimNotes: 0, recentCalls: [], noted: new Set() }
       sessions.set(sessionID, created)
       return created
     }
@@ -261,7 +268,15 @@ export const layer = Layer.effect(
       const model = TypeSafeAI.configure({ apiKey, baseURL, headers }).experimental.evaluation(modelID)
       const responses = yield* Effect.forEach(
         parts,
-        (questions) => Evaluation.run({ model, state: input.state, questions }),
+        (questions) =>
+          Evaluation.run({ model, state: input.state, questions }).pipe(
+            // A busy or rate-limited host often has room a moment later; the overall timeout still bounds the wait.
+            Effect.retry({
+              while: (error) => BUSY.test(error.message),
+              schedule: Schedule.exponential(Duration.millis(200)),
+              times: 3,
+            }),
+          ),
         { concurrency: "unbounded" },
       ).pipe(
         Effect.provide(EvaluationClient.layer),
@@ -317,6 +332,9 @@ export const node = makeLocationNode({
  */
 export const estimateTokens = (state: EvaluationInput, questions: Readonly<Record<string, EvaluationQuestion>>) =>
   Math.ceil(JSON.stringify({ state, questions }).length / 3.5) + 50
+
+/** How hosts word a temporary refusal: busy, overloaded or rate limited. */
+const BUSY = /busy|overload|capacity|rate.?limit|too many requests|429|503|retry shortly|try again/i
 
 /** How hosts word a request over the model's context, so an estimate that was too low is still reported as such. */
 const TOO_LARGE = /context (length|window)|too (long|large)|max(imum)?[ _-]?(input|context)|token limit|exceeds .*tokens/i
