@@ -1,4 +1,4 @@
-export * as RetryUse from "./retry.js"
+export * as RetriesUse from "./retries.js"
 
 import { Effect } from "effect"
 import { DecisionBlocks } from "../blocks.js"

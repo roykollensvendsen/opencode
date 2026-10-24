@@ -1,4 +1,4 @@
-export * as ToolUse from "./tool.js"
+export * as DecideUse from "./decide.js"
 
 import { EvaluationQuestion } from "@opencode/ai/experimental"
 import { Effect, Schema } from "effect"

@@ -1,4 +1,4 @@
-export * as ApproveUse from "./approve.js"
+export * as ApprovalUse from "./approval.js"
 
 import { Effect } from "effect"
 import { Decision } from "../../decision.js"

@@ -1,24 +1,24 @@
 export * as DecisionUses from "./uses.js"
 
-import { ApproveUse } from "./uses/approve.js"
+import { ApprovalUse } from "./uses/approval.js"
 import { ClaimsUse } from "./uses/claims.js"
 import { EffortUse } from "./uses/effort.js"
 import { GuardUse } from "./uses/guard.js"
-import { RetryUse } from "./uses/retry.js"
-import { RouteUse } from "./uses/route.js"
-import { ScreenUse } from "./uses/screen.js"
+import { RetriesUse } from "./uses/retries.js"
+import { RoutingUse } from "./uses/routing.js"
+import { ScreeningUse } from "./uses/screening.js"
 import { SkillsUse } from "./uses/skills.js"
-import { ToolUse } from "./uses/tool.js"
+import { DecideUse } from "./uses/decide.js"
 
 /** Every built-in use. Adding one is a new module here; none of them knows about the others. */
 export const all = [
-  ApproveUse.Use,
-  ScreenUse.Use,
+  ApprovalUse.Use,
+  ScreeningUse.Use,
   SkillsUse.Use,
-  ToolUse.Use,
+  DecideUse.Use,
   ClaimsUse.Use,
-  RetryUse.Use,
+  RetriesUse.Use,
   EffortUse.Use,
   GuardUse.Use,
-  RouteUse.Use,
+  RoutingUse.Use,
 ] as const

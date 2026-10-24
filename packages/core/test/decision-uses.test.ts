@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { SystemPart } from "@opencode/ai"
 import { DecisionText } from "@opencode/core/decision/text"
-import { ApproveUse } from "@opencode/core/decision/uses/approve"
+import { ApprovalUse } from "@opencode/core/decision/uses/approval"
 import { EffortUse } from "@opencode/core/decision/uses/effort"
 import { GuardUse } from "@opencode/core/decision/uses/guard"
-import { RetryUse } from "@opencode/core/decision/uses/retry"
-import { RouteUse } from "@opencode/core/decision/uses/route"
+import { RetriesUse } from "@opencode/core/decision/uses/retries"
+import { RoutingUse } from "@opencode/core/decision/uses/routing"
 import { SkillsUse } from "@opencode/core/decision/uses/skills"
 import { DecisionUses } from "@opencode/core/decision/uses"
 
@@ -17,29 +17,29 @@ describe("decision uses", () => {
   })
 
   test("approve allows routine calls, and after a flag only those that do not follow it", () => {
-    expect(ApproveUse.allows({ routine: 0.95, threshold: 0.9, flagged: false, follows: undefined })).toBe(true)
-    expect(ApproveUse.allows({ routine: 0.85, threshold: 0.9, flagged: false, follows: undefined })).toBe(false)
-    expect(ApproveUse.allows({ routine: undefined, threshold: 0.9, flagged: false, follows: undefined })).toBe(false)
-    expect(ApproveUse.allows({ routine: 0.95, threshold: 0.9, flagged: true, follows: 0.04 })).toBe(true)
-    expect(ApproveUse.allows({ routine: 0.95, threshold: 0.9, flagged: true, follows: 0.93 })).toBe(false)
+    expect(ApprovalUse.allows({ routine: 0.95, threshold: 0.9, flagged: false, follows: undefined })).toBe(true)
+    expect(ApprovalUse.allows({ routine: 0.85, threshold: 0.9, flagged: false, follows: undefined })).toBe(false)
+    expect(ApprovalUse.allows({ routine: undefined, threshold: 0.9, flagged: false, follows: undefined })).toBe(false)
+    expect(ApprovalUse.allows({ routine: 0.95, threshold: 0.9, flagged: true, follows: 0.04 })).toBe(true)
+    expect(ApprovalUse.allows({ routine: 0.95, threshold: 0.9, flagged: true, follows: 0.93 })).toBe(false)
     // A flag check that could not be answered never approves.
-    expect(ApproveUse.allows({ routine: 0.95, threshold: 0.9, flagged: true, follows: undefined })).toBe(false)
+    expect(ApprovalUse.allows({ routine: 0.95, threshold: 0.9, flagged: true, follows: undefined })).toBe(false)
   })
 
   test("approve lets OpenCode's own files and picked skills through without asking", () => {
-    expect(ApproveUse.isOwnPath(["/home/u/.local/share/opencode/shell/abc/*"])).toBe(true)
-    expect(ApproveUse.isOwnPath(["/home/u/.local/share/opencode/shell/abc/*", "/etc/passwd"])).toBe(false)
-    expect(ApproveUse.isOwnPath([])).toBe(false)
-    expect(ApproveUse.isPickedSkill("skill", ["db-migrations"], new Set(["db-migrations"]))).toBe(true)
-    expect(ApproveUse.isPickedSkill("skill", ["pdf"], new Set(["db-migrations"]))).toBe(false)
-    expect(ApproveUse.isPickedSkill("skill", ["pdf"], "all")).toBe(false)
-    expect(ApproveUse.isPickedSkill("edit", ["db-migrations"], new Set(["db-migrations"]))).toBe(false)
+    expect(ApprovalUse.isOwnPath(["/home/u/.local/share/opencode/shell/abc/*"])).toBe(true)
+    expect(ApprovalUse.isOwnPath(["/home/u/.local/share/opencode/shell/abc/*", "/etc/passwd"])).toBe(false)
+    expect(ApprovalUse.isOwnPath([])).toBe(false)
+    expect(ApprovalUse.isPickedSkill("skill", ["db-migrations"], new Set(["db-migrations"]))).toBe(true)
+    expect(ApprovalUse.isPickedSkill("skill", ["pdf"], new Set(["db-migrations"]))).toBe(false)
+    expect(ApprovalUse.isPickedSkill("skill", ["pdf"], "all")).toBe(false)
+    expect(ApprovalUse.isPickedSkill("edit", ["db-migrations"], new Set(["db-migrations"]))).toBe(false)
   })
 
   test("retry stops only when a retry is very unlikely to succeed", () => {
-    expect(RetryUse.stops(0.05, 0.9)).toBe(true)
-    expect(RetryUse.stops(0.3, 0.9)).toBe(false)
-    expect(RetryUse.stops(undefined, 0.9)).toBe(false)
+    expect(RetriesUse.stops(0.05, 0.9)).toBe(true)
+    expect(RetriesUse.stops(0.3, 0.9)).toBe(false)
+    expect(RetriesUse.stops(undefined, 0.9)).toBe(false)
   })
 
   test("effort picks the lowest or highest graded variant and otherwise keeps the base", () => {
@@ -54,9 +54,9 @@ describe("decision uses", () => {
   })
 
   test("route sends a request to plan only above the threshold", () => {
-    expect(RouteUse.routes({ plan: 0.97, build: 0.03 }, 0.9)).toBe(true)
-    expect(RouteUse.routes({ plan: 0.6, build: 0.4 }, 0.9)).toBe(false)
-    expect(RouteUse.routes(undefined, 0.9)).toBe(false)
+    expect(RoutingUse.routes({ plan: 0.97, build: 0.03 }, 0.9)).toBe(true)
+    expect(RoutingUse.routes({ plan: 0.6, build: 0.4 }, 0.9)).toBe(false)
+    expect(RoutingUse.routes(undefined, 0.9)).toBe(false)
   })
 
   test("guard judges edits and file-writing shell commands, not test runs", () => {

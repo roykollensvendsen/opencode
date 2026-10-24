@@ -1,4 +1,4 @@
-export * as ScreenUse from "./screen.js"
+export * as ScreeningUse from "./screening.js"
 
 import { Effect } from "effect"
 import { DecisionBlocks } from "../blocks.js"
