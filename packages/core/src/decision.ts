@@ -74,6 +74,8 @@ export interface SessionState {
   userRequest?: string
   readonly flags: Flag[]
   skills?: ReadonlySet<string> | "all"
+  /** Contradicted claims already reported, so the claim check never loops. */
+  claimNotes: number
 }
 
 export interface Interface {
@@ -96,13 +98,14 @@ export const layer = Layer.effect(
     const executor = yield* RequestExecutor.Service
     const integrations = yield* Integration.Service
     const providers = yield* Provider.Service
-    const cache = new Map<string, { readonly expires: number; readonly result: Result }>()
+    const cache = new Map<string, { readonly expires: number; readonly result: Extract<Result, { status: "ok" }> }>()
     const sessions = new Map<string, SessionState>()
     const session = (sessionID: string) => {
       const found = sessions.get(sessionID)
       if (found) return found
-      if (sessions.size >= SESSION_LIMIT) sessions.delete(sessions.keys().next().value!)
-      const created: SessionState = { flags: [] }
+      const oldest = sessions.keys().next()
+      if (sessions.size >= SESSION_LIMIT && !oldest.done) sessions.delete(oldest.value)
+      const created: SessionState = { flags: [], claimNotes: 0 }
       sessions.set(sessionID, created)
       return created
     }
@@ -133,7 +136,7 @@ export const layer = Layer.effect(
         .update(canonical({ model: input.model, state: input.state, questions: input.questions }))
         .digest("hex")
       const hit = cache.get(key)
-      if (hit && hit.expires > Date.now()) return { ...hit.result, cached: true, ms: 0 } as Result
+      if (hit && hit.expires > Date.now()) return { ...hit.result, cached: true, ms: 0 }
 
       const { apiKey, baseURL, headers } = yield* access(providerID)
       if (!apiKey) return { ...base, status: "unavailable", reason: "no-credential", ms: elapsed() } satisfies Result
@@ -157,7 +160,7 @@ export const layer = Layer.effect(
           Effect.succeed({
             ok: false as const,
             deadline: error._tag === "TimeoutError",
-            message: String((error as { message?: unknown }).message ?? error),
+            message: error.message,
           }),
         ),
       )
@@ -180,7 +183,8 @@ export const layer = Layer.effect(
         ms: elapsed(),
         cached: false,
       } satisfies Result
-      if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!)
+      const oldest = cache.keys().next()
+      if (cache.size >= CACHE_LIMIT && !oldest.done) cache.delete(oldest.value)
       cache.set(key, { expires: Date.now() + CACHE_TTL_MS, result })
       return result
     })
@@ -211,8 +215,8 @@ const canonical = (value: unknown): string =>
   Array.isArray(value)
     ? `[${value.map(canonical).join(",")}]`
     : value !== null && typeof value === "object"
-      ? `{${Object.keys(value)
-          .sort()
-          .map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`)
+      ? `{${Object.entries(value)
+          .toSorted(([a], [b]) => a.localeCompare(b))
+          .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
           .join(",")}}`
       : JSON.stringify(value) ?? "null"
