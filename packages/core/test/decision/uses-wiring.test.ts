@@ -99,6 +99,7 @@ describe("approval", () => {
       yield* setup(ApprovalUse.Use, r)
       r.kit.session(sessionID).skills = new Set(["db-migrations"])
       expect((yield* r.fire("permission.evaluate", evaluate("skill", ["db-migrations"]))).effect).toBe("allow")
+      expect((yield* r.fire("permission.evaluate", evaluate("todowrite", ["*"]))).effect).toBe("allow")
       expect((yield* r.fire("permission.evaluate", evaluate("read", ["/x/opencode/shell/abc/*"]))).effect).toBe("allow")
       expect(r.asked).toHaveLength(0)
     }),
@@ -468,6 +469,24 @@ describe("prompt and context uses", () => {
       )
       expect(values.slice(0, 2).every((value) => value.includes("left out"))).toBe(true)
       expect(values.slice(-3)).toEqual(["output c", "output d", "output e"])
+      // Each result is judged on its full text, not a short head: a fact deep in a file decides whether it is kept.
+      const long = {
+        type: "tool-result" as const,
+        id: "f",
+        name: "read",
+        result: { type: "text" as const, value: `${"filler ".repeat(600)}the rate is 149 NOK ${"filler ".repeat(600)}` },
+      }
+      const deep = rig({ answers: { score: () => 1 }, settings: { threshold: 0.75 } })
+      yield* setup(CompactionUse.Use, deep)
+      deep.kit.session(sessionID).userRequest = "what is the rate?"
+      yield* deep.fire("session.compaction", {
+        sessionID,
+        ...context(),
+        messages: [long, ...["a", "b", "c"].map((id) => result(id))].map(
+          (part) => new Message({ role: "tool", content: [part] }),
+        ),
+      })
+      expect(JSON.stringify(deep.asked[0]?.state)).toContain("149 NOK")
     }),
   )
 })

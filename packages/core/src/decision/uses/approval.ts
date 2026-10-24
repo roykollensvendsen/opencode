@@ -39,8 +39,16 @@ const OWN_PATHS = /\/opencode\/(shell|tool-output|snapshot)\//
 export const isOwnPath = (resources: ReadonlyArray<string>) =>
   resources.length > 0 && resources.every((resource) => OWN_PATHS.test(resource))
 
-export const isPickedSkill = (action: string, resources: ReadonlyArray<string>, skills: Decision.SessionState["skills"]) =>
-  action === "skill" && skills instanceof Set && resources.length > 0 && resources.every((id) => skills.has(id))
+/** Tools that only change OpenCode's own Session state, such as the todo list, and touch nothing of the user's. */
+const OWN_TOOLS = new Set(["todowrite"])
+
+export const isOwnTool = (action: string) => OWN_TOOLS.has(action)
+
+export const isPickedSkill = (
+  action: string,
+  resources: ReadonlyArray<string>,
+  skills: Decision.SessionState["skills"],
+) => action === "skill" && skills instanceof Set && resources.length > 0 && resources.every((id) => skills.has(id))
 
 /** Allow only a routine call that, when anything was flagged, is judged not to carry out the flagged instructions. */
 export const allows = (input: {
@@ -66,12 +74,19 @@ export const Use = DecisionUse.define({
         const state = kit.session(event.sessionID)
         const shortcut = isOwnPath(event.resources)
           ? "own-path"
-          : isPickedSkill(event.action, event.resources, state.skills)
-            ? "skills"
-            : undefined
+          : isOwnTool(event.action)
+            ? "own-tool"
+            : isPickedSkill(event.action, event.resources, state.skills)
+              ? "skills"
+              : undefined
         if (shortcut) {
           event.effect = "allow"
-          return yield* kit.log({ action: event.action, resources: event.resources.join(","), effect: "allow", source: shortcut })
+          return yield* kit.log({
+            action: event.action,
+            resources: event.resources.join(","),
+            effect: "allow",
+            source: shortcut,
+          })
         }
         const call = { tool: event.action, resources: [...event.resources] }
         // The flag check gets the flagged text; the main question does not, since that text makes every call look
@@ -80,7 +95,11 @@ export const Use = DecisionUse.define({
           [
             DecisionBlocks.gate(
               kit,
-              { user_request: state.userRequest ?? "(unknown)", ...call, details: DecisionText.toJson(event.metadata) ?? null },
+              {
+                user_request: state.userRequest ?? "(unknown)",
+                ...call,
+                details: DecisionText.toJson(event.metadata) ?? null,
+              },
               QUESTION,
             ),
             state.flags.length === 0
@@ -89,7 +108,9 @@ export const Use = DecisionUse.define({
                   kit,
                   {
                     call,
-                    flagged_content: state.flags.slice(-3).map((flag) => ({ source: flag.source, excerpt: flag.excerpt })),
+                    flagged_content: state.flags
+                      .slice(-3)
+                      .map((flag) => ({ source: flag.source, excerpt: flag.excerpt })),
                   },
                   FOLLOWS,
                 ),

@@ -23,11 +23,14 @@ type Result = Extract<Part, { type: "tool-result" }>
 
 const STUB = "[left out of the compaction summary as no longer needed]"
 
-/** A short text of a tool result for judging it. */
-export const preview = (part: Result) => {
+/**
+ * The text of a tool result for judging it. Each result is judged in its own request, so it can take most of the
+ * model's context: a fact deep in a file is what decides whether the result is still needed.
+ */
+export const preview = (part: Result, max: number) => {
   const value = part.result.value
   const text = typeof value === "string" ? value : DecisionText.contentText(value) || JSON.stringify(value ?? "")
-  return `${part.name}: ${DecisionText.clip(text, 400)}`
+  return `${part.name}: ${DecisionText.clip(text, max)}`
 }
 
 export const Use = DecisionUse.define({
@@ -50,15 +53,24 @@ export const Use = DecisionUse.define({
         const scores = yield* Effect.forEach(
           judged,
           (part) =>
-            DecisionBlocks.rate(kit, { current_request: DecisionText.clip(request, 1_500), tool_result: preview(part) }, QUESTION),
+            DecisionBlocks.rate(
+              kit,
+              {
+                current_request: DecisionText.clip(request, 1_500),
+                tool_result: preview(part, DecisionText.budget(kit.limit(), 0.6)),
+              },
+              QUESTION,
+            ),
           { concurrency: 4 },
         )
         // A result the model could not score is kept.
         const stale = new Set(
-          judged.filter((_, i) => {
-            const score = scores[i]?.score
-            return score !== undefined && score < settings.threshold
-          }).map((part) => part.id),
+          judged
+            .filter((_, i) => {
+              const score = scores[i]?.score
+              return score !== undefined && score < settings.threshold
+            })
+            .map((part) => part.id),
         )
         yield* kit.log({ results: results.length, judged: judged.length, dropped: stale.size })
         if (stale.size === 0) return
@@ -67,7 +79,9 @@ export const Use = DecisionUse.define({
             ? new Message({
                 ...message,
                 content: message.content.map((part) =>
-                  part.type === "tool-result" && stale.has(part.id) ? { ...part, result: { type: "text", value: STUB } } : part,
+                  part.type === "tool-result" && stale.has(part.id)
+                    ? { ...part, result: { type: "text", value: STUB } }
+                    : part,
                 ),
               })
             : message,
