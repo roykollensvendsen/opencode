@@ -340,17 +340,20 @@ export const node = makeLocationNode({
 })
 
 /**
- * A conservative token estimate for one request: its JSON size at 3.5 characters a token, which overcounts English and
- * code slightly, plus room for the request envelope.
+ * Characters of request JSON per token, chosen below the worst case measured. Tool output (code, JSON, logs) sent to
+ * quyet-1-large came to 1.59 to 3.29 characters per counted token, median 2.28, prompt template included.
  */
+export const CHARS_PER_TOKEN = 1.5
+
+/** A conservative token estimate for one request: its JSON size at `CHARS_PER_TOKEN`, plus room for the envelope. */
 export const estimateTokens = (state: EvaluationInput, questions: Readonly<Record<string, EvaluationQuestion>>) =>
-  Math.ceil(JSON.stringify({ state, questions }).length / 3.5) + 50
+  Math.ceil(JSON.stringify({ state, questions }).length / CHARS_PER_TOKEN) + 50
 
 /** How hosts word a temporary refusal: busy, overloaded or rate limited. */
 const BUSY = /busy|overload|capacity|rate.?limit|too many requests|429|503|retry shortly|try again/i
 
 /** How hosts word a request over the model's context, so an estimate that was too low is still reported as such. */
-const TOO_LARGE = /context (length|window)|too (long|large)|max(imum)?[ _-]?(input|context)|token limit|exceeds .*tokens/i
+const TOO_LARGE = /context (length|window)|too (long|large)|max(imum)?[ _-]?(input|context)|token limit|(exceeds|longer than) .*tokens/i
 
 /** Probability of a boolean answer, or undefined when the answer is missing or of another type. */
 export const probability = (result: Result, id: string) => {

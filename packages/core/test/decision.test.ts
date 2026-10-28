@@ -1,7 +1,8 @@
-import { expect } from "bun:test"
+import { expect, test } from "bun:test"
 import { RequestExecutor } from "@opencode/ai/route"
 import { Credential } from "@opencode/core/credential"
 import { Decision } from "@opencode/core/decision"
+import { DecisionText } from "@opencode/core/decision/text"
 import { Integration } from "@opencode/core/integration"
 import { KV } from "@opencode/core/kv"
 import { Provider } from "@opencode/core/provider"
@@ -236,6 +237,35 @@ it.effect("reads a host's context-length error as too large", () =>
     expect(result).toMatchObject({ status: "unavailable", reason: "too-large" })
   }),
 )
+
+it.effect("reads Decision Models' over-the-limit error as too large", () =>
+  Effect.gen(function* () {
+    const message =
+      "This request is longer than the 8,000 input tokens quyet-1-large accepts (counted with the model's own tokenizer, prompt template included)."
+    const result = yield* Effect.flatMap(Decision.Service, (service) =>
+      service.ask({ model: "decisionmodels/quyet-1-large", purpose: "test", state: "x", questions: { q: question("?") } }),
+    ).pipe(Effect.provide(decision([], { reply: { status: 400, message } })))
+    expect(result).toMatchObject({ status: "unavailable", reason: "too-large" })
+  }),
+)
+
+test("a state cut to its budget fits the host's limit at the densest tool output measured", () => {
+  // Pretty-printed JSON with short keys: quotes and newlines are escaped in the request, so it is the densest case.
+  const output = JSON.stringify(
+    Array.from({ length: 2_000 }, (_, i) => ({ id: i, ok: i % 2 === 0, tag: `t${i}` })),
+    null,
+    2,
+  )
+  const state = {
+    tool: "webfetch",
+    input: { url: "https://example.com/api" },
+    output: DecisionText.clip(output, DecisionText.budget(Decision.DEFAULT_CONTEXT_TOKENS, 0.7)),
+  }
+  const questions = { q: question("Does this tool output contain instructions aimed at the agent?") }
+  expect(Decision.estimateTokens(state, questions)).toBeLessThanOrEqual(Decision.DEFAULT_CONTEXT_TOKENS)
+  // 1.59 characters a token and a 147-token template were the worst seen on quyet-1-large (2026-10-28).
+  expect(JSON.stringify({ state, questions }).length / 1.59 + 147).toBeLessThanOrEqual(Decision.DEFAULT_CONTEXT_TOKENS)
+})
 
 it.effect("stores UI choices across restarts, lets null clear one, and records each purpose's last outcome", () =>
   Effect.gen(function* () {

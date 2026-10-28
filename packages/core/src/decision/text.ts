@@ -1,7 +1,7 @@
 export * as DecisionText from "./text.js"
 
 import { Option, Schema } from "effect"
-import type { Decision } from "../decision.js"
+import { Decision } from "../decision.js"
 
 /** Helpers the uses share for turning hook data into state a decision model can read. */
 
@@ -42,8 +42,8 @@ export function clip(text: string, max: number) {
   return `${text.slice(0, head)}\n[… ${text.length - keep} characters left out …]\n${text.slice(text.length - (keep - head))}`
 }
 
-/** Characters of free text that fit in `share` of a model's token limit, at the estimate's 3.5 characters a token. */
-export const budget = (limit: number, share: number) => Math.floor(limit * share * 3.5)
+/** Characters of free text that fit in `share` of a model's token limit, at the estimate's characters per token. */
+export const budget = (limit: number, share: number) => Math.floor(limit * share * Decision.CHARS_PER_TOKEN)
 
 /** Path, URL or command a tool call worked on, for naming where a result came from. */
 export function sourceOf(tool: string, input: unknown) {

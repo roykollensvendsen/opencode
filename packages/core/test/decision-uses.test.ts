@@ -248,7 +248,7 @@ describe("decision text helpers", () => {
     expect(clipped.endsWith("zzz")).toBe(true)
     expect(clipped).not.toContain("MIDDLE")
     expect(clipped).toContain("characters left out")
-    expect(DecisionText.budget(8_000, 0.5)).toBe(14_000)
+    expect(DecisionText.budget(8_000, 0.5)).toBe(6_000)
   })
 
   test("resultText and sourceOf read the usual tool shapes", () => {

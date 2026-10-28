@@ -133,7 +133,7 @@ Not built:
 - Unit tests cover the service and the pure decision functions (18 tests). They do not cover each use's hook wiring or the loader.
 - There is no API for external plugins (`ctx.decision.ask`) and no `opencode decide` command.
 - Several parallel callers on one key hit HTTP 429. The service may need a per-host concurrency limit.
-- Requests over the model's context are now reported as `too-large` before sending, with `decision.context` defaulting to 8,000. The estimate is 3.5 characters per token, and it is not calibrated against the host's tokenizer.
+- Requests over the model's context are reported as `too-large` before sending, with `decision.context` defaulting to 8,000. The estimate is 1.5 characters of request JSON per token. On 40 tool outputs from real sessions (code, JSON, logs), quyet-1-large counted 1.59 to 3.29 characters per token, median 2.28. The earlier 3.5 let two screening requests through that the host then refused. It is measured on one host's tokenizer only.
 
 - Shared building blocks. The about 40 candidates reduce to four question forms: gate (one boolean), select (one boolean per item, threshold or top-k, with a cap), choose (choice) and rate (score). They use a small set of triggers (prompt, before and after a tool, permission, context, idle, retry, compaction) and actions (allow, annotate, reject, filter context, switch model or agent, synthetic note or resume, notify, badge). Shared state builders would cover the request, the last command, recent tool calls, the diff per file and flags. The uses should be rewritten on these blocks.
 - Controls: built as the `/decisions` dialog (like `/mcps`), with per-user overrides in KV that win over config. Still open: a `/status` entry, and the web and desktop apps.
